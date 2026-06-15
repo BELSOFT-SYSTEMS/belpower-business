@@ -1,0 +1,174 @@
+@import 'tailwindcss';
+
+@font-face {
+  font-family: 'Digital-7';
+  src:
+    local('Digital-7'),
+    url('/fonts/digital-7.woff') format('woff'),
+    local('Courier New'),
+    local('monospace');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@theme {
+  --font-primary: var(--font-sora), 'Sora', sans-serif;
+  --font-digital: 'Digital-7', monospace;
+
+  --color-blue-light: #e6eaf2;
+  --color-blue-normal: #003078;
+  --color-blue-normal-hover: #002b6c;
+  --color-blue-dark: #00245a;
+  --color-blue-darker: #00112a;
+
+  --color-red-normal: #c8102e;
+
+  --color-green-light: #e6f0f0;
+  --color-green-normal: #006c68;
+  --color-green-normal-hover: #00615c;
+
+  --color-white-off: #faf9f9;
+  --color-gray-normal: #f3f2f1;
+  --color-gray: #667085;
+  --color-gray-light: #8c8c8c;
+
+  --color-meter-from: #28228d;
+  --color-meter-to: #000041;
+
+  --shadow-even: 0 0 10px rgba(0, 0, 0, 0.15);
+}
+
+@layer base {
+  :root {
+    @apply bg-white font-primary leading-[22px] antialiased;
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+  }
+
+  *,
+  *::after,
+  *::before {
+    @apply m-0 p-0 box-border scroll-smooth;
+  }
+
+  button {
+    @apply cursor-pointer;
+  }
+}
+
+.font-digital {
+  font-family: var(--font-digital);
+}
+
+/* Bela floating chat */
+.bela-image-container {
+  position: relative;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: transparent;
+}
+
+.bela-image-container::before {
+  content: '';
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  background: conic-gradient(from 0deg at 50% 50%, transparent 0% 80%, #10b981 80% 100%);
+  border-radius: 50%;
+  animation: bela-rotate-border 1.5s linear infinite;
+  z-index: 0;
+}
+
+.bela-image-container img {
+  position: relative;
+  z-index: 1;
+  border-radius: 50%;
+  background: white;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  width: calc(100% - 4px);
+  height: calc(100% - 4px);
+  object-fit: cover;
+}
+
+@keyframes bela-rotate-border {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes bela-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.85;
+  }
+  50% {
+    transform: scale(1.15);
+    opacity: 0.55;
+  }
+}
+
+.bela-pulse-ring {
+  animation: bela-pulse 2.2s ease-in-out infinite;
+}
+
+.bela-fab {
+  cursor: grab;
+}
+
+.bela-fab:active {
+  cursor: grabbing;
+}
+
+/* Auth hero panel (sign-in left side) */
+@layer components {
+  .auth-hero-panel {
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(135deg, #003078 0%, #00245a 50%, #00112a 100%);
+  }
+
+  .auth-hero-blob1 {
+    position: absolute;
+    width: 500px;
+    height: 500px;
+    border-radius: 50%;
+    background: rgba(0, 48, 120, 0.35);
+    top: -200px;
+    right: -100px;
+    pointer-events: none;
+  }
+
+  .auth-hero-blob2 {
+    position: absolute;
+    width: 300px;
+    height: 300px;
+    border-radius: 50%;
+    background: rgba(230, 234, 242, 0.12);
+    bottom: -100px;
+    right: 200px;
+    pointer-events: none;
+  }
+
+  .sidebar-brand-panel .auth-hero-blob1 {
+    width: 180px;
+    height: 180px;
+    top: -70px;
+    right: -50px;
+  }
+
+  .sidebar-brand-panel .auth-hero-blob2 {
+    width: 120px;
+    height: 120px;
+    bottom: -50px;
+    right: -20px;
+  }
+}
