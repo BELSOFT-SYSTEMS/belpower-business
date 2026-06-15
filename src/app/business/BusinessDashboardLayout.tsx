@@ -7,17 +7,24 @@ import { cn } from '@/lib/utils';
 import { BusinessSidebar } from '@/components/business/BusinessSidebar';
 import { BusinessTopBar } from '@/components/business/BusinessTopBar';
 import { useBusinessAuth } from '@/context/BusinessAuthContext';
+import { BusinessShellProvider, useBusinessShell } from '@/context/BusinessShellContext';
 import { isPublicBusinessRoute } from '@/constants/businessNavPermissions';
+import '@/styles/businessShell.css';
 
 type BusinessDashboardLayoutProps = {
   children: ReactNode;
 };
 
-export default function BusinessDashboardLayout({ children }: BusinessDashboardLayoutProps) {
+function BusinessDashboardContent({ children }: { children: ReactNode }) {
   const pathname = usePathname() ?? '';
   const { isAuthenticated, isLoading } = useBusinessAuth();
+  const { sidebarCollapsed } = useBusinessShell();
   const isPublicRoute = isPublicBusinessRoute(pathname);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+
+  useEffect(() => {
+    setMobileNavOpen(false);
+  }, [pathname]);
 
   useEffect(() => {
     if (isLoading || isPublicRoute) return;
@@ -64,16 +71,30 @@ export default function BusinessDashboardLayout({ children }: BusinessDashboardL
 
       <div
         className={cn(
-          'fixed top-16 left-0 z-40 h-[calc(100vh-4rem)] md:z-30',
-          mobileNavOpen ? 'block' : 'hidden md:block'
+          'fixed top-16 left-0 z-40 h-[calc(100vh-4rem)] transition-[width] duration-200 md:z-30',
+          mobileNavOpen ? 'block w-64' : 'hidden md:block',
+          !mobileNavOpen && (sidebarCollapsed ? 'md:w-[4.5rem]' : 'md:w-64')
         )}
       >
         <BusinessSidebar onNavigate={() => setMobileNavOpen(false)} />
       </div>
 
-      <div className="pt-16 md:pl-64">
+      <div
+        className={cn(
+          'pt-16 transition-[padding] duration-200',
+          sidebarCollapsed ? 'md:pl-[4.5rem]' : 'md:pl-64'
+        )}
+      >
         <main className="min-h-[calc(100vh-4rem)] p-4 md:p-6">{children}</main>
       </div>
     </div>
+  );
+}
+
+export default function BusinessDashboardLayout({ children }: BusinessDashboardLayoutProps) {
+  return (
+    <BusinessShellProvider>
+      <BusinessDashboardContent>{children}</BusinessDashboardContent>
+    </BusinessShellProvider>
   );
 }
