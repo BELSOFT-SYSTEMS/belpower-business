@@ -107,6 +107,7 @@ export const PUBLIC_BUSINESS_PATHS = [
   '/business/sign-in',
   '/business/register',
   '/business/forgot-password',
+  '/business/reset-password',
   '/business/accept-invite',
 ] as const;
 
@@ -119,6 +120,35 @@ export function isPublicBusinessRoute(pathname: string): boolean {
   return PUBLIC_BUSINESS_PATHS.some(
     (path) => pathname === path || pathname.startsWith(`${path}/`)
   );
+}
+
+/** Longest-prefix match for route-level RBAC in the dashboard shell. */
+export function getRequiredPermissionForRoute(pathname: string): string | null {
+  const normalized = pathname.replace(/\/$/, '') || '/business';
+
+  if (isPublicBusinessRoute(normalized)) return null;
+
+  const exact: Record<string, string> = {
+    '/business': 'business.view',
+    '/business/settings': 'business.settings.manage',
+    '/business/wallet/fund': 'wallet.fund',
+    '/business/wallet/allocate': 'wallet.allocate',
+    '/business/wallet/statements': 'wallet.statements',
+    '/business/wallet': 'wallet.view',
+    '/business/branches': 'branches.view',
+    '/business/beneficiaries': 'beneficiaries.view',
+    '/business/transactions': 'transactions.view',
+    '/business/analytics': 'analytics.view',
+    '/business/team': 'team.view',
+    '/business/notifications': 'notifications.view',
+  };
+
+  if (exact[normalized]) return exact[normalized];
+
+  if (normalized.startsWith('/business/payments/bulk')) return 'payments.bulk';
+  if (normalized.startsWith('/business/payments/')) return 'payments.single';
+
+  return 'business.view';
 }
 
 export function isSuperAdminRole(role: BusinessRole | undefined): boolean {

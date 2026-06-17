@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { ChevronDown, Download, ArrowRightLeft, Wallet } from 'lucide-react';
+import { Download, ArrowRightLeft, Wallet } from 'lucide-react';
+import { BusinessSelect } from '@/components/business/BusinessSelect';
 import { BusinessTransactionList } from '@/components/business/BusinessTransactionList';
 import { useBusinessAuth } from '@/context/BusinessAuthContext';
 import {
@@ -60,27 +61,19 @@ export default function WalletPage() {
       <div className="mb-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <h1 className="text-2xl font-semibold text-gray-900">Wallet</h1>
-          <div className="relative w-full sm:w-auto sm:min-w-[220px]">
-            <select
-              value={selectedBranchId}
-              onChange={(e) => setSelectedBranchId(e.target.value)}
-              disabled={branchOptions.length <= 1}
-              className="w-full appearance-none rounded-xl border border-gray-300 bg-white py-2.5 pr-10 pl-4 text-sm font-medium text-gray-900 outline-none focus:border-blue-normal focus:ring-2 focus:ring-blue-normal/20 disabled:cursor-default disabled:bg-gray-50"
-              aria-label="Select branch"
-            >
-              {branchOptions.map((branch) => (
-                <option key={branch.branchId} value={branch.branchId}>
-                  {canViewCompanyWallet
-                    ? `${branch.branchName} · ${formatPrice(branch.allocatedBalance)}`
-                    : branch.branchName}
-                </option>
-              ))}
-            </select>
-            <ChevronDown
-              className="pointer-events-none absolute top-1/2 right-3 h-4 w-4 -translate-y-1/2 text-gray-500"
-              aria-hidden
-            />
-          </div>
+          <BusinessSelect
+            value={selectedBranchId}
+            onChange={setSelectedBranchId}
+            disabled={branchOptions.length <= 1}
+            fitContent
+            aria-label="Select branch"
+            options={branchOptions.map((branch) => ({
+              value: branch.branchId,
+              label: canViewCompanyWallet
+                ? `${branch.branchName} · ${formatPrice(branch.allocatedBalance)}`
+                : branch.branchName,
+            }))}
+          />
         </div>
         <p className="mt-2 text-sm text-gray-600">
           Wallet stats and activity for{' '}
@@ -156,8 +149,6 @@ export default function WalletPage() {
         </div>
         <BusinessTransactionList
           transactions={branchActivity}
-          showEntryTypeBadge
-          entryType="debit"
           emptyMessage={`No recent activity for ${selectedBranch?.branchName ?? 'this branch'}.`}
         />
       </section>

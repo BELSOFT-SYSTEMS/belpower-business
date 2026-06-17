@@ -79,3 +79,8 @@ export function getDiscoIcon(discoCode: string): string {
   };
   return discoMap[providerLower] || '/electricity.png';
 }
+
+/** Provider logo for receipt PDF header — matches belpower-admin / frontend. */
+export function getProviderLogo(provider: string, type: string): string {
+  return getTransactionIcon({ type, provider });
+}

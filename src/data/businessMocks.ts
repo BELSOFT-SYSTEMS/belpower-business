@@ -1,9 +1,12 @@
 import type {
+  BusinessAnalyticsData,
   BusinessBeneficiary,
   BusinessBranch,
   BusinessDashboardData,
   BusinessNotification,
   BusinessRole,
+  BranchSpendItem,
+  BranchSpendPeriod,
   BranchWalletOverview,
   BusinessTeamMember,
   BusinessTransactionPreview,
@@ -239,12 +242,25 @@ export const MOCK_NOTIFICATIONS: BusinessNotification[] = [
 
 export const MOCK_TRANSACTIONS: BusinessTransactionPreview[] = [
   {
+    id: 'tx-0',
+    reference: 'BEL-BIZ-20260612001',
+    service: 'wallet',
+    provider: 'bank_transfer',
+    amount: 500000,
+    status: 'completed',
+    entryType: 'credit',
+    branchName: 'Head Office',
+    userName: 'Belba Ngoy',
+    createdAt: '2026-06-12T08:00:00.000Z',
+  },
+  {
     id: 'tx-1',
     reference: 'BEL-BIZ-20260611001',
     service: 'electricity',
     provider: 'ABUJA',
     amount: 85000,
     status: 'completed',
+    entryType: 'debit',
     branchName: 'Head Office',
     userName: 'Belba Ngoy',
     createdAt: '2026-06-11T10:30:00.000Z',
@@ -256,6 +272,7 @@ export const MOCK_TRANSACTIONS: BusinessTransactionPreview[] = [
     provider: 'mtn',
     amount: 50000,
     status: 'completed',
+    entryType: 'debit',
     branchName: 'Abuja Branch',
     userName: 'Amina Okafor',
     createdAt: '2026-06-11T09:15:00.000Z',
@@ -267,6 +284,7 @@ export const MOCK_TRANSACTIONS: BusinessTransactionPreview[] = [
     provider: 'airtel',
     amount: 25000,
     status: 'pending',
+    entryType: 'debit',
     branchName: 'Lagos Branch',
     userName: 'Belba Ngoy',
     createdAt: '2026-06-10T16:45:00.000Z',
@@ -278,6 +296,7 @@ export const MOCK_TRANSACTIONS: BusinessTransactionPreview[] = [
     provider: 'dstv',
     amount: 24500,
     status: 'completed',
+    entryType: 'debit',
     branchName: 'Head Office',
     userName: 'Chioma Eze',
     createdAt: '2026-06-10T11:00:00.000Z',
@@ -289,6 +308,7 @@ export const MOCK_TRANSACTIONS: BusinessTransactionPreview[] = [
     provider: 'IKEJA',
     amount: 120000,
     status: 'failed',
+    entryType: 'debit',
     branchName: 'Lagos Branch',
     userName: 'Emeka Nwosu',
     createdAt: '2026-06-09T14:30:00.000Z',
@@ -300,6 +320,7 @@ export const MOCK_TRANSACTIONS: BusinessTransactionPreview[] = [
     provider: 'glo',
     amount: 10000,
     status: 'completed',
+    entryType: 'debit',
     branchName: 'Port Harcourt Branch',
     userName: 'Belba Ngoy',
     createdAt: '2026-06-08T09:00:00.000Z',
@@ -364,8 +385,12 @@ export const MOCK_WALLET_STATEMENTS: WalletStatementRow[] = [
     type: 'credit',
     description: 'Bank transfer — wallet funding',
     amount: 500000,
+    balanceBefore: 1950000,
     balanceAfter: 2450000,
     branchName: null,
+    performedByName: 'Chioma Eze',
+    performedByRole: 'finance_manager',
+    status: 'completed',
     createdAt: '2026-06-11T09:00:00.000Z',
   },
   {
@@ -374,8 +399,12 @@ export const MOCK_WALLET_STATEMENTS: WalletStatementRow[] = [
     type: 'debit',
     description: 'Electricity — ABUJA prepaid',
     amount: 85000,
+    balanceBefore: 2450000,
     balanceAfter: 2365000,
     branchName: 'Head Office',
+    performedByName: 'Belba Ngoy',
+    performedByRole: 'super_admin',
+    status: 'completed',
     createdAt: '2026-06-11T10:30:00.000Z',
   },
   {
@@ -384,8 +413,12 @@ export const MOCK_WALLET_STATEMENTS: WalletStatementRow[] = [
     type: 'debit',
     description: 'Airtime — MTN',
     amount: 50000,
+    balanceBefore: 2365000,
     balanceAfter: 2315000,
     branchName: 'Abuja Branch',
+    performedByName: 'Amina Okafor',
+    performedByRole: 'operations_officer',
+    status: 'completed',
     createdAt: '2026-06-11T09:15:00.000Z',
   },
   {
@@ -394,39 +427,167 @@ export const MOCK_WALLET_STATEMENTS: WalletStatementRow[] = [
     type: 'debit',
     description: 'Cable TV — DSTV',
     amount: 24500,
+    balanceBefore: 2315000,
     balanceAfter: 2290500,
     branchName: 'Head Office',
+    performedByName: 'Belba Ngoy',
+    performedByRole: 'super_admin',
+    status: 'completed',
     createdAt: '2026-06-10T11:00:00.000Z',
   },
   {
     id: 'ws-5',
+    reference: 'BEL-BIZ-20260610005',
+    type: 'debit',
+    description: 'Data bundle — Airtel',
+    amount: 15000,
+    balanceBefore: 2290500,
+    balanceAfter: 2290500,
+    branchName: 'Kano Branch',
+    performedByName: 'Emeka Nwosu',
+    performedByRole: 'operations_officer',
+    status: 'pending',
+    createdAt: '2026-06-10T16:00:00.000Z',
+  },
+  {
+    id: 'ws-6',
     reference: 'BEL-BIZ-20260609005',
     type: 'debit',
     description: 'Electricity — IKEJA prepaid',
     amount: 120000,
-    balanceAfter: 2170500,
+    balanceBefore: 2290500,
+    balanceAfter: 2290500,
     branchName: 'Lagos Branch',
+    performedByName: 'Emeka Nwosu',
+    performedByRole: 'operations_officer',
+    status: 'failed',
     createdAt: '2026-06-09T14:30:00.000Z',
   },
   {
-    id: 'ws-6',
+    id: 'ws-7',
+    reference: 'BEL-BIZ-20260609006',
+    type: 'debit',
+    description: 'Airtime — MTN',
+    amount: 20000,
+    balanceBefore: 2410500,
+    balanceAfter: 2290500,
+    branchName: 'Abuja Branch',
+    performedByName: 'Amina Okafor',
+    performedByRole: 'operations_officer',
+    status: 'completed',
+    createdAt: '2026-06-09T09:00:00.000Z',
+  },
+  {
+    id: 'ws-8',
+    reference: 'ALLOC-20260608001',
+    type: 'debit',
+    description: 'Branch allocation — Kano Branch',
+    amount: 280000,
+    balanceBefore: 2230000,
+    balanceAfter: 1950000,
+    branchName: 'Kano Branch',
+    performedByName: 'Chioma Eze',
+    performedByRole: 'finance_manager',
+    status: 'completed',
+    createdAt: '2026-06-08T10:00:00.000Z',
+  },
+  {
+    id: 'ws-9',
     reference: 'BEL-BIZ-20260608006',
     type: 'debit',
     description: 'Airtime — Glo',
     amount: 10000,
-    balanceAfter: 2160500,
+    balanceBefore: 2240000,
+    balanceAfter: 2230000,
     branchName: 'Port Harcourt Branch',
+    performedByName: 'Belba Ngoy',
+    performedByRole: 'super_admin',
+    status: 'completed',
     createdAt: '2026-06-08T09:00:00.000Z',
   },
   {
-    id: 'ws-7',
+    id: 'ws-10',
     reference: 'FUND-20260608001',
     type: 'credit',
     description: 'Bank transfer — wallet funding',
     amount: 1000000,
-    balanceAfter: 1950000,
+    balanceBefore: 1240000,
+    balanceAfter: 2240000,
     branchName: null,
+    performedByName: 'Chioma Eze',
+    performedByRole: 'finance_manager',
+    status: 'completed',
     createdAt: '2026-06-08T08:00:00.000Z',
+  },
+  {
+    id: 'ws-11',
+    reference: 'BEL-BIZ-20260607001',
+    type: 'debit',
+    description: 'Electricity — ENUGU prepaid',
+    amount: 45000,
+    balanceBefore: 1285000,
+    balanceAfter: 1240000,
+    branchName: 'Enugu Branch',
+    performedByName: 'Belba Ngoy',
+    performedByRole: 'super_admin',
+    status: 'completed',
+    createdAt: '2026-06-07T15:00:00.000Z',
+  },
+  {
+    id: 'ws-12',
+    reference: 'BEL-BIZ-20260606001',
+    type: 'debit',
+    description: 'Data bundle — MTN',
+    amount: 8000,
+    balanceBefore: 1293000,
+    balanceAfter: 1285000,
+    branchName: 'Kano Branch',
+    performedByName: 'Emeka Nwosu',
+    performedByRole: 'operations_officer',
+    status: 'completed',
+    createdAt: '2026-06-06T11:30:00.000Z',
+  },
+  {
+    id: 'ws-13',
+    reference: 'BEL-BIZ-20260605001',
+    type: 'debit',
+    description: 'Electricity — ABUJA prepaid',
+    amount: 65000,
+    balanceBefore: 1358000,
+    balanceAfter: 1293000,
+    branchName: 'Abuja Branch',
+    performedByName: 'Amina Okafor',
+    performedByRole: 'operations_officer',
+    status: 'completed',
+    createdAt: '2026-06-05T14:00:00.000Z',
+  },
+  {
+    id: 'ws-14',
+    reference: 'BEL-BIZ-20260604001',
+    type: 'debit',
+    description: 'Cable TV — GOTV',
+    amount: 11000,
+    balanceBefore: 1369000,
+    balanceAfter: 1358000,
+    branchName: 'Head Office',
+    performedByName: 'Belba Ngoy',
+    performedByRole: 'super_admin',
+    status: 'completed',
+    createdAt: '2026-06-04T09:45:00.000Z',
+  },
+  {
+    id: 'ws-15',
+    reference: 'FUND-20260603001',
+    type: 'credit',
+    description: 'Card payment — wallet funding',
+    amount: 750000,
+    balanceBefore: 619000,
+    balanceAfter: 1369000,
+    branchName: null,
+    performedByName: 'Chioma Eze',
+    performedByRole: 'finance_manager',
+    status: 'completed',
+    createdAt: '2026-06-03T08:30:00.000Z',
   },
 ];
 
@@ -489,6 +650,55 @@ export const MOCK_DASHBOARD: BusinessDashboardData = {
     { branchId: 'branch-enugu', branchName: 'Enugu Branch', amount: 540000 },
   ],
 };
+
+const MOCK_BRANCH_SPEND_BY_PERIOD: Record<BranchSpendPeriod, BranchSpendItem[]> = {
+  today: [
+    { branchId: 'branch-hq', branchName: 'Head Office', amount: 85000 },
+    { branchId: 'branch-lagos', branchName: 'Lagos Branch', amount: 50000 },
+    { branchId: 'branch-abuja', branchName: 'Abuja Branch', amount: 32000 },
+    { branchId: 'branch-ph', branchName: 'Port Harcourt Branch', amount: 24500 },
+    { branchId: 'branch-kano', branchName: 'Kano Branch', amount: 10000 },
+    { branchId: 'branch-enugu', branchName: 'Enugu Branch', amount: 0 },
+  ],
+  '7d': [
+    { branchId: 'branch-hq', branchName: 'Head Office', amount: 420000 },
+    { branchId: 'branch-lagos', branchName: 'Lagos Branch', amount: 385000 },
+    { branchId: 'branch-abuja', branchName: 'Abuja Branch', amount: 210000 },
+    { branchId: 'branch-ph', branchName: 'Port Harcourt Branch', amount: 175000 },
+    { branchId: 'branch-kano', branchName: 'Kano Branch', amount: 98000 },
+    { branchId: 'branch-enugu', branchName: 'Enugu Branch', amount: 65000 },
+  ],
+  '30d': [
+    { branchId: 'branch-hq', branchName: 'Head Office', amount: 2100000 },
+    { branchId: 'branch-lagos', branchName: 'Lagos Branch', amount: 1850000 },
+    { branchId: 'branch-abuja', branchName: 'Abuja Branch', amount: 1170000 },
+    { branchId: 'branch-ph', branchName: 'Port Harcourt Branch', amount: 980000 },
+    { branchId: 'branch-kano', branchName: 'Kano Branch', amount: 760000 },
+    { branchId: 'branch-enugu', branchName: 'Enugu Branch', amount: 540000 },
+  ],
+  all: [
+    { branchId: 'branch-hq', branchName: 'Head Office', amount: 8450000 },
+    { branchId: 'branch-lagos', branchName: 'Lagos Branch', amount: 7120000 },
+    { branchId: 'branch-abuja', branchName: 'Abuja Branch', amount: 4980000 },
+    { branchId: 'branch-ph', branchName: 'Port Harcourt Branch', amount: 3650000 },
+    { branchId: 'branch-kano', branchName: 'Kano Branch', amount: 2890000 },
+    { branchId: 'branch-enugu', branchName: 'Enugu Branch', amount: 1920000 },
+  ],
+};
+
+export function getMockBranchSpendForPeriod(
+  period: BranchSpendPeriod,
+  role: BusinessRole,
+): BranchSpendItem[] {
+  const spend = MOCK_BRANCH_SPEND_BY_PERIOD[period];
+
+  if (role === 'operations_officer') {
+    const branchId = MOCK_OPS_OFFICER.branchId!;
+    return spend.filter((item) => item.branchId === branchId);
+  }
+
+  return spend;
+}
 
 export function getMockDashboardForRole(role: BusinessRole): BusinessDashboardData {
   const base = MOCK_DASHBOARD;
@@ -563,10 +773,29 @@ export function getUnallocatedCompanyBalance(): number {
 export function getMockWalletStatementsForRole(role: BusinessRole): WalletStatementRow[] {
   if (role === 'operations_officer') {
     return MOCK_WALLET_STATEMENTS.filter(
-      (row) => row.branchName === MOCK_OPS_OFFICER.branchName || row.branchName === null
+      (row) => row.branchName === MOCK_OPS_OFFICER.branchName,
     );
   }
   return MOCK_WALLET_STATEMENTS;
+}
+
+export function getMockStatementBranchFilterOptions(role: BusinessRole): string[] {
+  const statements = getMockWalletStatementsForRole(role);
+  const branchNames = new Set<string>();
+
+  for (const row of statements) {
+    if (row.branchName) {
+      branchNames.add(row.branchName);
+    }
+  }
+
+  for (const branch of MOCK_BRANCH_WALLET_OVERVIEW) {
+    if (role !== 'operations_officer' || branch.branchId === MOCK_OPS_OFFICER.branchId) {
+      branchNames.add(branch.branchName);
+    }
+  }
+
+  return Array.from(branchNames).sort((a, b) => a.localeCompare(b));
 }
 
 export function canViewAllBranchWalletInfo(role: BusinessRole): boolean {
@@ -591,5 +820,35 @@ export function getWalletBalanceDisplayForRole(role: BusinessRole): {
   return {
     label: 'Branch wallet balance',
     balance: branch?.allocatedBalance ?? 0,
+  };
+}
+
+export function getMockAnalyticsForRole(role: BusinessRole): BusinessAnalyticsData {
+  const dashboard = getMockDashboardForRole(role);
+  const transactions = getMockTransactionsForRole(role);
+
+  const serviceMap = new Map<string, { amount: number; count: number }>();
+  for (const tx of transactions) {
+    const current = serviceMap.get(tx.service) ?? { amount: 0, count: 0 };
+    serviceMap.set(tx.service, {
+      amount: current.amount + tx.amount,
+      count: current.count + 1,
+    });
+  }
+
+  const totalTransactionsThisMonth = transactions.length;
+  const totalSpendThisMonth = transactions.reduce((sum, tx) => sum + tx.amount, 0);
+
+  return {
+    totalSpendThisMonth,
+    totalTransactionsThisMonth,
+    averageTransactionAmount:
+      totalTransactionsThisMonth > 0 ? Math.round(totalSpendThisMonth / totalTransactionsThisMonth) : 0,
+    branchSpend: dashboard.branchSpend,
+    serviceBreakdown: Array.from(serviceMap.entries()).map(([service, data]) => ({
+      service,
+      amount: data.amount,
+      count: data.count,
+    })),
   };
 }

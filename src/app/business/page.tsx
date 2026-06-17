@@ -36,7 +36,7 @@ function StatCard({
 }
 
 export default function BusinessDashboardPage() {
-  const { user, isSuperAdmin, demoRole, setDemoRole } = useBusinessAuth();
+  const { user, isSuperAdmin, demoRole, setDemoRole, canAccess } = useBusinessAuth();
 
   const dashboard = useMemo(
     () => getMockDashboardForRole(user?.role ?? demoRole),
@@ -108,22 +108,21 @@ export default function BusinessDashboardPage() {
         />
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-5 xl:items-stretch">
-        <div className="flex xl:col-span-2">
-          <div className="w-full">
-            <DigitalMeterDisplay
-              meters={dashboard.meters}
-              walletBalance={walletDisplay.balance}
-              allowSwipe={isSuperAdmin}
-            />
-          </div>
+      <div className="grid gap-6 xl:grid-cols-2 xl:items-stretch">
+        <div className="flex min-h-0 w-full min-w-0 flex-col">
+          <DigitalMeterDisplay
+            meters={dashboard.meters}
+            walletBalance={walletDisplay.balance}
+            allowSwipe={isSuperAdmin}
+          />
         </div>
 
-        <section className="flex h-full min-h-0 flex-col rounded-xl border border-gray-200 bg-white p-4 shadow-sm xl:col-span-3">
+        <section className="flex h-full min-h-0 flex-col rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
           <div className="mb-4 flex shrink-0 items-center justify-between">
             <h2 className="text-lg font-semibold text-gray-900">Quick actions</h2>
           </div>
           <div className="flex flex-1 items-center">
+            {canAccess('payments.single') ? (
             <div className="grid w-full grid-cols-2 gap-3 sm:grid-cols-4">
             {[
               { name: 'Airtime', href: '/business/payments/airtime', emoji: '/airtime.png', color: 'bg-green-50' },
@@ -141,6 +140,11 @@ export default function BusinessDashboardPage() {
               </Link>
             ))}
             </div>
+            ) : (
+              <p className="w-full text-center text-sm text-gray-500">
+                Payment shortcuts are not available for your role.
+              </p>
+            )}
           </div>
         </section>
       </div>
@@ -157,7 +161,7 @@ export default function BusinessDashboardPage() {
 
       {isSuperAdmin && (
         <section className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-          <BranchSpendCarousel branches={dashboard.branchSpend} />
+          <BranchSpendCarousel role={user?.role ?? demoRole} />
         </section>
       )}
     </div>

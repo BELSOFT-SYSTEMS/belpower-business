@@ -1,8 +1,8 @@
 'use client';
 
-import Image from 'next/image';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useBelaChat } from '@/context/BelaChatContext';
+import { BelaAvatar } from './BelaAvatar';
 
 const FAB_SIZE = 56;
 const EDGE_PADDING = 20;
@@ -159,16 +159,8 @@ export default function BelaChatFAB() {
     >
       <span className="bela-pulse-ring absolute inset-[-3px] rounded-full bg-blue-light" />
       <span className="relative z-10 block h-full w-full overflow-hidden rounded-full shadow-lg ring-2 ring-white">
-        <div className="bela-image-container h-full w-full">
-          <Image
-            src="/Bela.png"
-            alt="Bela"
-            width={FAB_SIZE}
-            height={FAB_SIZE}
-            className="h-full w-full object-cover"
-            draggable={false}
-            priority
-          />
+        <div className="bela-image-container flex h-full w-full items-center justify-center p-0.5">
+          <BelaAvatar size={FAB_SIZE - 4} priority />
         </div>
       </span>
     </button>

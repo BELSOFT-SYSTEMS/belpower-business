@@ -8,7 +8,8 @@ import { BusinessSidebar } from '@/components/business/BusinessSidebar';
 import { BusinessTopBar } from '@/components/business/BusinessTopBar';
 import { useBusinessAuth } from '@/context/BusinessAuthContext';
 import { BusinessShellProvider, useBusinessShell } from '@/context/BusinessShellContext';
-import { isPublicBusinessRoute } from '@/constants/businessNavPermissions';
+import { isPublicBusinessRoute, getRequiredPermissionForRoute } from '@/constants/businessNavPermissions';
+import { BusinessForbidden } from '@/components/business/BusinessRequirePermission';
 import '@/styles/businessShell.css';
 
 type BusinessDashboardLayoutProps = {
@@ -17,7 +18,7 @@ type BusinessDashboardLayoutProps = {
 
 function BusinessDashboardContent({ children }: { children: ReactNode }) {
   const pathname = usePathname() ?? '';
-  const { isAuthenticated, isLoading } = useBusinessAuth();
+  const { isAuthenticated, isLoading, canAccess } = useBusinessAuth();
   const { sidebarCollapsed } = useBusinessShell();
   const isPublicRoute = isPublicBusinessRoute(pathname);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -52,6 +53,20 @@ function BusinessDashboardContent({ children }: { children: ReactNode }) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50">
         <Loader2 className="h-8 w-8 animate-spin text-blue-normal" aria-hidden />
+      </div>
+    );
+  }
+
+  const requiredPermission = getRequiredPermissionForRoute(pathname);
+  if (requiredPermission && !canAccess(requiredPermission)) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <BusinessTopBar onMenuClick={() => setMobileNavOpen((v) => !v)} />
+        <div className="pt-16">
+          <main className="min-h-[calc(100vh-4rem)] p-4 md:p-6">
+            <BusinessForbidden permission={requiredPermission} />
+          </main>
+        </div>
       </div>
     );
   }

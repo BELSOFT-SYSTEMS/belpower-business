@@ -1,0 +1,515 @@
+.receiptContainer {
+  max-width: 210mm;
+  margin: 0 auto;
+  padding: 20px 15mm;
+  padding-bottom: 260px;
+  background: #fff;
+  color: #333;
+  font-family: var(--font-sora), 'Sora', sans-serif;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+  line-height: 1.5;
+  min-height: 297mm;
+  position: relative;
+  box-sizing: border-box;
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 20px 0;
+  min-height: 120px;
+}
+
+.logoContainer {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  width: 100%;
+  min-height: 50px;
+}
+
+/* BelPower Logo (Rectangular) */
+.logo {
+  height: 48px;
+  width: auto;
+  max-width: 200px;
+  display: block;
+}
+
+/* Provider Logo (Square) */
+.providerLogo {
+  height: 98px;
+  width: auto;
+  max-width: 150px;
+  border-radius: 6px;
+  background: #fff;
+  padding: 4px;
+  box-sizing: border-box;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  display: block;
+}
+
+.title {
+  font-size: 24px;
+  font-weight: 600;
+  color: #1a365d;
+  margin: 0;
+}
+
+.body {
+  margin-bottom: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.section {
+  margin-bottom: 10px;
+}
+
+.sectionHeader {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1a365d;
+  margin: 10px 0 10px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid #e2e8f0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.sectionDivider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #e2e8f0, transparent);
+  margin: 8px 0;
+}
+
+.row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 5px;
+  padding-bottom: 5px;
+  border-bottom: 1px solid #f0f4f8;
+  font-size: 12px;
+  align-items: flex-start;
+}
+
+.label {
+  font-weight: 500;
+  color: #4a5568;
+  flex: 1;
+}
+
+.value {
+  text-align: right;
+  color: #1a202c;
+}
+
+.tokenContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  flex: 1;
+  text-align: right;
+}
+
+.token {
+  font-family: var(--font-sora), 'Sora', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  word-break: break-all;
+  color: #1a365d;
+  background: #f8fafc;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px dashed #cbd5e0;
+  margin-bottom: 4px;
+  line-height: 1.4;
+}
+
+.note {
+  font-size: 12px;
+  color: #718096;
+  margin: 5px 0 0;
+  font-style: italic;
+  text-align: right;
+}
+
+.status {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  width: fit-content;
+  text-transform: capitalize;
+}
+
+.status.success {
+  width: fit-content;
+  background-color: #c6f6d5;
+  color: #22543d;
+}
+
+.status.pending {
+  width: fit-content;
+  background-color: #feebc8;
+  color: #7b341e;
+}
+
+.status.failed {
+  width: fit-content;
+  background-color: #fed7d7;
+  color: #822727;
+}
+
+.divider {
+  height: 1px;
+  background-color: #e2e8f0;
+  margin: 10px 0;
+}
+
+.total {
+  font-size: 12px;
+  font-weight: 600;
+  margin-top: 5px;
+  padding-top: 5px;
+  border-top: 2px solid #e2e8f0;
+  /* border-bottom: 2px solid #e2e8f0; */
+  padding-bottom: 5px;
+}
+
+.amount {
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  color: #1a365d !important;
+}
+
+.noteBox {
+  background-color: #fcefba;
+  border-left: 4px solid #fbbf24;
+  padding: 12px 16px;
+  margin: 16px 0;
+  border-radius: 0 4px 4px 0;
+}
+
+.noteBox p {
+  margin: 6px 0;
+  font-size: 13px;
+  color: #92400e;
+  line-height: 1.5;
+}
+
+.tokenContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  text-align: right;
+}
+
+.token {
+  font-family: var(--font-sora), 'Sora', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e40af;
+  background-color: #eff6ff;
+  padding: 8px 12px;
+  border-radius: 4px;
+  border: 1px dashed #93c5fd;
+  margin-bottom: 4px;
+  word-break: break-all;
+}
+
+.note {
+  font-size: 12px;
+  color: #6b7280;
+  margin: 4px 0 0;
+  font-style: italic;
+  max-width: 300px;
+}
+
+.amount {
+  color: #2b6cb0;
+  font-size: 18px;
+}
+
+.scheduledInfo {
+  margin-top: 20px;
+  padding: 15px;
+  background-color: #f7fafc;
+  border-radius: 8px;
+  border-left: 4px solid #ecc94b;
+}
+
+.scheduledInfo h4 {
+  margin-top: 0;
+  margin-bottom: 10px;
+  color: #b7791f;
+}
+
+.scheduledInfo p {
+  margin: 5px 0;
+  font-size: 14px;
+  color: #4a5568;
+}
+
+.scheduledInfo .note {
+  font-size: 12px;
+  color: #718096;
+  font-style: italic;
+  margin-top: 10px;
+}
+
+@page {
+  size: A4;
+  margin: 0;
+}
+
+.footerWrapper {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+
+.footer {
+  position: relative;
+  width: 100%;
+  color: #000041;
+  font-family: var(--font-sora), 'Sora', sans-serif;
+  font-size: 1rem;
+  height: 200px;
+  margin: 0;
+  line-height: 1.5;
+  overflow: visible;
+  box-sizing: border-box;
+  padding: 0 20px;
+}
+
+.footerRectangles {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  max-width: 210mm; /* Match receipt width */
+  height: 8rem; /* Reduced from 14rem to fit more content */
+  margin: 0 auto;
+  padding: 0;
+  box-sizing: border-box;
+  overflow: visible;
+}
+
+/* Navy rectangle - bottom layer */
+.firstRectangle {
+  position: absolute;
+  width: 100%;
+  height: 6rem; /* Reduced from 10rem */
+  left: 0;
+  bottom: 0;
+  background-color: #000041;
+  z-index: 1;
+  box-sizing: border-box;
+}
+
+/* Lime rectangle - top layer */
+.secondRectangle {
+  position: absolute;
+  width: 100%;
+  height: 6rem; /* Reduced from 10rem */
+  /* left: 3rem; */
+  /* right: 3rem; */
+  bottom: 2rem; /* Adjusted from 4rem */
+  background-color: #e2f526;
+  z-index: 2;
+  padding: 1rem; /* Reduced from 1.5rem */
+  box-sizing: border-box;
+  display: grid;
+  /* grid-template-columns: 44% 28% 28%; */
+  grid-template-columns: minmax(250px, 44%) minmax(200px, 28%) minmax(200px, 28%);
+  gap: 0.6rem; /* Reduced from 0.8rem */
+  border-radius: 5px;
+}
+
+/* Chip styles */
+.chip {
+  background-color: #000041;
+  color: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px !important;
+  font-weight: 500;
+  white-space: nowrap;
+  border-radius: 2px;
+  height: auto;
+  line-height: 1.2;
+  padding: 0.4rem 0.8rem;
+  letter-spacing: -0.2px;
+}
+
+/* Footer sections */
+.footerSection {
+  padding: 0 0.5rem;
+  position: relative;
+}
+
+.footerSection:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  right: -0.625rem;
+  top: 2.5rem;
+  bottom: 0;
+  width: 1px;
+  background-color: rgba(0, 0, 65, 0.15);
+}
+
+.footerSection p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #000041;
+}
+
+.linkList {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 2px !important;
+}
+
+.footerSection a {
+  color: #000041;
+  text-decoration: none;
+  transition: opacity 0.2s;
+  display: block;
+  margin: 0;
+  font-size: 13px;
+}
+
+.footerSection a:hover {
+  opacity: 0.8;
+  text-decoration: underline;
+}
+
+.badgeContainer {
+  background-color: #000041;
+  border-radius: 2px;
+  width: fit-content;
+  padding: 5px 10px;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.badgeContainer h4 {
+  color: #ffffff !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  line-height: 1.2 !important;
+  text-transform: none !important;
+  white-space: nowrap !important;
+  letter-spacing: normal !important;
+  word-spacing: normal !important;
+}
+
+.copyright {
+  padding-top: 10px;
+  border-top: 1px solid #e5e7eb;
+  text-align: center;
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.copyright p {
+  margin: 5px 0;
+}
+
+@media print {
+  .receiptContainer {
+    box-shadow: none;
+    padding: 0;
+    padding-bottom: 250px;
+    max-width: 100%;
+    font-size: 12px;
+    height: auto;
+    min-height: 100vh; /* Automatically fits the printer's exact page size */
+  }
+
+  .logo {
+    height: 50px;
+    width: auto;
+    max-width: 150px;
+  }
+
+  .providerLogo {
+    height: 50px;
+    width: auto;
+    max-width: 100px;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .print-only {
+    display: block !important;
+  }
+
+  .footer {
+    margin-top: 20px;
+    padding-top: 15px;
+    font-size: 11px;
+  }
+
+  .footerSection {
+    margin-bottom: 15px;
+  }
+
+  .footerSection h4 {
+    font-size: 12px;
+    margin-bottom: 8px;
+  }
+
+  .footerSection p,
+  .footerSection a {
+    font-size: 11px;
+  }
+
+  .copyright {
+    margin-top: 20px;
+    padding-top: 15px;
+    font-size: 10px;
+  }
+
+  /* Ensure page breaks don't split important content */
+  .section,
+  .total,
+  .scheduledInfo {
+    page-break-inside: avoid;
+  }
+
+  /* Remove forced page break to prevent blank pages */
+  .receiptContainer {
+    page-break-after: auto;
+  }
+
+  /* Hide interactive elements in print */
+  .receiptContainer a[href^='http']:after {
+    content: ' (' attr(href) ')';
+    font-size: 0.9em;
+    font-weight: normal;
+  }
+
+  /* Ensure colors are visible in print */
+  .status {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}

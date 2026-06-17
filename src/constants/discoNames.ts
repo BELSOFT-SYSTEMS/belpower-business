@@ -1,4 +1,5 @@
-/** Shared DISCO display names — aligned with belpower-frontend */
+/** Shared DISCO display names — aligned with belpower-frontend `constants/discoNames.ts` */
+
 export const DISCO_NAMES: Record<string, string> = {
   ABUJA: 'Abuja Electricity Distribution Company',
   ACCESSPOWER: 'ACCESSPOWER',
@@ -31,19 +32,36 @@ export const DISCO_NAMES: Record<string, string> = {
   MEGAPLAZA: 'Mega Plaza',
   NESCO: 'Nigerian Electricity Supply Corporation',
   CENECO: 'Aiyegun',
-  IKEDC: 'Ikeja Electricity Distribution Company',
-  EKEDC: 'Eko Electricity Distribution Company',
-  AEDC: 'Abuja Electricity Distribution Company',
-  IBEDC: 'Ibadan Electricity Distribution Company',
-  PHED: 'Port Harcourt Electricity Distribution Company',
-  KAEDC: 'Kaduna Electricity Distribution Company',
-  KEDCO: 'Kano Electricity Distribution Company',
-  JEDC: 'Jos Electricity Distribution',
-  BEDC: 'Benin Electricity Distribution Company',
-  YEDC: 'Yola Electricity Distribution Company',
 };
+
+/** Alternate API/backend codes mapped to canonical DISCO_NAMES keys. */
+const DISCO_CODE_ALIASES: Record<string, keyof typeof DISCO_NAMES> = {
+  IKEDC: 'IKEJA',
+  EKEDC: 'EKO',
+  AEDC: 'ABUJA',
+  IBEDC: 'IBADAN',
+  PHED: 'PH',
+  KAEDC: 'KADUNA',
+  KEDCO: 'KANO',
+  JEDC: 'JOS',
+  BEDC: 'BENIN',
+  YEDC: 'YOLA',
+};
+
+export type ElectricityProviderOption = {
+  code: string;
+  name: string;
+};
+
+/** Same fallback list belpower-frontend onboarding uses when the providers API is unavailable. */
+export function getElectricityProviderOptions(): ElectricityProviderOption[] {
+  return Object.entries(DISCO_NAMES)
+    .map(([code, name]) => ({ code, name }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
 
 export function getDiscoDisplayName(code: string): string {
   const key = code?.toUpperCase().replace(/\s/g, '_') ?? '';
-  return DISCO_NAMES[key] ?? code;
+  const resolved = DISCO_CODE_ALIASES[key] ?? key;
+  return DISCO_NAMES[resolved] ?? code;
 }

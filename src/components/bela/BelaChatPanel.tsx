@@ -1,10 +1,10 @@
 'use client';
 
-import Image from 'next/image';
 import { useEffect, useRef } from 'react';
 import { FaWhatsapp } from 'react-icons/fa';
 import { IoClose, IoSend } from 'react-icons/io5';
 import { useBelaChat } from '@/context/BelaChatContext';
+import { BelaAvatar } from './BelaAvatar';
 
 function formatTime(date: Date) {
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -57,8 +57,8 @@ export default function BelaChatPanel() {
           <div className="flex items-center gap-3">
             <div className="relative flex h-12 w-12 items-center justify-center">
               <span className="bela-pulse-ring absolute h-[52px] w-[52px] rounded-full bg-blue-light" />
-              <div className="bela-image-container relative z-10 h-11 w-11">
-                <Image src="/Bela.png" alt="Bela" width={44} height={44} className="object-cover" />
+              <div className="bela-image-container flex h-11 w-11 items-center justify-center p-0.5">
+                <BelaAvatar size={40} priority />
               </div>
               <span className="absolute bottom-0.5 right-0.5 z-20 h-3 w-3 rounded-full border-2 border-white bg-green-normal" />
             </div>

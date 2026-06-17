@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import { useBusinessAuth } from '@/context/BusinessAuthContext';
+import { PasswordInput } from '@/components/business/PasswordInput';
 
 export default function BusinessSignInPage() {
   const router = useRouter();
@@ -27,7 +28,7 @@ export default function BusinessSignInPage() {
 
     const params = new URLSearchParams(window.location.search);
     const from = params.get('from') || '/business';
-    router.push(from);
+    router.push(from); 
     setSubmitting(false);
   };
 
@@ -107,20 +108,23 @@ export default function BusinessSignInPage() {
             </div>
 
             <div>
-              <label htmlFor="password" className="mb-1.5 block text-sm font-medium text-gray-700">
-                Password
-              </label>
-              <input
+              <PasswordInput
                 id="password"
-                name="password"
-                type="password"
+                label="Password"
+                value={password}
+                onChange={setPassword}
+                placeholder="Enter your password"
                 autoComplete="current-password"
                 required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Enter your password"
-                className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm text-gray-900 outline-none focus:border-blue-normal focus:ring-2 focus:ring-blue-normal/20"
               />
+              <div className="mt-2 text-right">
+                <Link
+                  href="/business/forgot-password"
+                  className="text-xs font-medium text-blue-normal hover:underline"
+                >
+                  Forgot password?
+                </Link>
+              </div>
             </div>
 
             <button
@@ -132,7 +136,7 @@ export default function BusinessSignInPage() {
             </button>
 
             <p className="text-center text-xs text-gray-500">
-              Phase 0 demo — any email/password signs in as Super Admin until the API is connected.
+              Mock sign-in — any email and password signs in as Super Admin until the API is connected.
             </p>
           </form>
 

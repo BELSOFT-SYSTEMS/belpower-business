@@ -56,8 +56,12 @@ export type WalletStatementRow = {
   type: 'credit' | 'debit';
   description: string;
   amount: number;
+  balanceBefore: number;
   balanceAfter: number;
   branchName: string | null;
+  performedByName: string;
+  performedByRole: BusinessRole;
+  status: 'completed' | 'pending' | 'failed';
   createdAt: string;
 };
 
@@ -120,9 +124,18 @@ export type BusinessTransactionPreview = {
   provider: string;
   amount: number;
   status: 'completed' | 'pending' | 'failed';
+  entryType: 'credit' | 'debit';
   branchName: string;
   userName: string;
   createdAt: string;
+};
+
+export type BranchSpendPeriod = 'today' | '7d' | '30d' | 'all';
+
+export type BranchSpendItem = {
+  branchId: string;
+  branchName: string;
+  amount: number;
 };
 
 export type BusinessDashboardData = {
@@ -131,5 +144,13 @@ export type BusinessDashboardData = {
   wallet: BusinessWalletSummary;
   meters: BranchMeter[];
   recentTransactions: BusinessTransactionPreview[];
-  branchSpend: { branchId: string; branchName: string; amount: number }[];
+  branchSpend: BranchSpendItem[];
+};
+
+export type BusinessAnalyticsData = {
+  totalSpendThisMonth: number;
+  totalTransactionsThisMonth: number;
+  averageTransactionAmount: number;
+  branchSpend: BranchSpendItem[];
+  serviceBreakdown: { service: string; amount: number; count: number }[];
 };

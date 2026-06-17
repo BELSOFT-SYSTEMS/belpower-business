@@ -43,35 +43,45 @@ function DigitalMeterCard({ meter, walletBalance, showBranchLabel = false }: Dig
   const discoIcon = getDiscoIcon(meter.disco);
 
   return (
-    <div className="relative flex flex-col gap-2 overflow-hidden rounded-xl bg-linear-to-t from-[#28228D] to-[#000041] p-4 text-white">
-      <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-gray-800/80 backdrop-blur-xs">
+    <div className="relative flex w-full flex-col gap-2 overflow-hidden rounded-xl bg-linear-to-t from-[#28228D] to-[#000041] p-4 text-white">
+      <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-gray-800/80 backdrop-blur-sm">
         <div className="flex flex-col items-center justify-center gap-1.5 px-4 text-center">
           <div className="inline-block rounded-full bg-gray-800/90 px-3 py-1">
-            <span className="text-xs font-semibold text-gray-300">Feature coming soon</span>
+            <span className="text-xs font-semibold text-gray-300">🚧 Feature Coming Soon</span>
           </div>
           <p className="text-xs text-gray-300">
-            Real-time meter monitoring will be available in a future update
+            Real-time meter monitoring will be available in the next update
           </p>
         </div>
       </div>
 
-      <div className="mb-2 flex items-start justify-between gap-2">
-        <div className="min-w-0 flex-1">
-          {showBranchLabel && (
-            <p className="mb-0.5 truncate text-xs font-medium text-blue-200">{meter.branchName}</p>
-          )}
-          <p className="text-sm font-medium">
-            Digital meter: {meter.meterNumber}
-          </p>
-          <p className="truncate text-xs text-gray-300">{getDiscoDisplayName(meter.disco)}</p>
+      <div className="flex items-start justify-between gap-2">
+        {showBranchLabel ? (
+          <p className="min-w-0 truncate text-xs font-medium text-blue-200">{meter.branchName}</p>
+        ) : (
+          <span className="text-xs font-semibold uppercase tracking-wide text-blue-200/80">
+            Digital meter
+          </span>
+        )}
+      </div>
+
+      <div className="flex items-center justify-between gap-3">
+        <p className="min-w-0 truncate text-sm font-medium">Meter: {meter.meterNumber}</p>
+        <div className="flex shrink-0 items-center gap-1.5 whitespace-nowrap">
+          <span className="text-xs">{hasEnoughCredit ? 'Enough credit' : 'Low credit'}</span>
+          <div className={`h-2 w-2 rounded-full ${hasEnoughCredit ? 'bg-green-400' : 'bg-red-500'}`} />
         </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <Image src={discoIcon} alt={meter.disco} width={28} height={28} className="rounded bg-white/10 p-0.5" />
-          <div className="flex items-center space-x-1">
-            <span className="text-xs">{hasEnoughCredit ? 'Enough credit' : 'Low credit'}</span>
-            <div className={`h-2 w-2 rounded-full ${hasEnoughCredit ? 'bg-green-400' : 'bg-red-500'}`} />
-          </div>
-        </div>
+      </div>
+
+      <div className="flex min-w-0 items-center gap-2">
+        <Image
+          src={discoIcon}
+          alt={meter.disco}
+          width={24}
+          height={24}
+          className="shrink-0 rounded bg-white/10 p-0.5"
+        />
+        <p className="min-w-0 truncate text-xs text-gray-300">{getDiscoDisplayName(meter.disco)}</p>
       </div>
 
       <div className="relative mb-2 rounded-lg border border-green-400/30 bg-green-400/20 p-3">
@@ -115,7 +125,7 @@ export function DigitalMeterDisplay({
 
   if (!meters.length) {
     return (
-      <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 p-6 text-center text-sm text-gray-500">
+      <div className="w-full rounded-xl border border-dashed border-gray-300 bg-gray-50 p-6 text-center text-sm text-gray-500">
         No meter linked to this branch yet.
       </div>
     );
@@ -126,7 +136,7 @@ export function DigitalMeterDisplay({
 
   if (!showCarousel) {
     return (
-      <div className="h-full">
+      <div className="h-full w-full">
         <DigitalMeterCard
           meter={meters[0]}
           walletBalance={walletBalance}
@@ -137,7 +147,7 @@ export function DigitalMeterDisplay({
   }
 
   return (
-    <div className="flex h-full flex-col space-y-3">
+    <div className="flex h-full w-full flex-col space-y-3">
       <div className="flex items-center justify-between">
         <p className="text-sm font-medium text-gray-700">
           Branch meters ({activeIndex + 1} of {meters.length})
@@ -162,9 +172,9 @@ export function DigitalMeterDisplay({
         </div>
       </div>
 
-      <div className="flex flex-1 flex-col">
+      <div className="flex w-full flex-1 flex-col">
         <div
-          className="flex flex-1 touch-pan-y"
+          className="flex w-full flex-1 touch-pan-y"
         onTouchStart={(e) => {
           (e.currentTarget as HTMLElement & { _touchX?: number })._touchX = e.touches[0].clientX;
         }}
