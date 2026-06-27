@@ -264,6 +264,7 @@ export function shouldTrustTopLevelTotalAmount(tx: Transaction): boolean {
 function resolveMetadataTotalPaid(
   sources: {
     dataTotal?: number | string | null;
+    requestedAmount?: number | string | null;
     expected?: number | string | null;
     breakdownTotal?: number | string | null;
     baseAmount: number;
@@ -275,18 +276,36 @@ function resolveMetadataTotalPaid(
   if (sources.dataTotal != null && sources.dataTotal !== '') {
     return Number(sources.dataTotal);
   }
-  if (sources.expected != null && sources.expected !== '') {
+
+  if (sources.requestedAmount != null && sources.requestedAmount !== '') {
+    return Number(sources.requestedAmount);
+  }
+
+  if (!isDva && sources.expected != null && sources.expected !== '') {
     return Number(sources.expected);
   }
+
   if (sources.breakdownTotal != null && sources.breakdownTotal !== '') {
-    return Number(sources.breakdownTotal);
+    const breakdownTotal = Number(sources.breakdownTotal);
+    const expectedUtilityTotal = sources.baseAmount + sources.serviceCharge;
+    if (
+      sources.serviceCharge > 0 &&
+      breakdownTotal > 0 &&
+      breakdownTotal < expectedUtilityTotal - 0.01
+    ) {
+      return breakdownTotal + sources.serviceCharge;
+    }
+    return breakdownTotal;
   }
+
   if (sources.baseAmount > 0 || sources.serviceCharge > 0) {
     return sources.baseAmount + sources.serviceCharge;
   }
+
   if (!isDva && txFallback) {
     return Number(txFallback.total_amount ?? txFallback.amount_paid ?? 0);
   }
+
   return 0;
 }
 
@@ -488,11 +507,12 @@ export function getElectricityBillingFromTransaction(
     const totalPaid = resolveMetadataTotalPaid(
       {
         dataTotal: ed?.total_amount,
-        expected: meta?.expected_amount,
+        requestedAmount: meta?.requested_amount,
+        expected: isDva ? null : meta?.expected_amount,
         breakdownTotal:
           breakdown?.total_amount ??
           breakdown?.user_paid ??
-          pickNumber(bpRoot?.total_amount),
+          (!isDva ? pickNumber(bpRoot?.total_amount) : null),
         baseAmount: base,
         serviceCharge: serviceChargeFixed,
       },
@@ -539,7 +559,8 @@ export function getCableBillingFromTransaction(tx: Transaction): CableBillingBre
   const totalPaid = resolveMetadataTotalPaid(
     {
       dataTotal: cd?.total_amount,
-      expected: meta?.expected_amount,
+      requestedAmount: meta?.requested_amount,
+      expected: isDva ? null : meta?.expected_amount,
       breakdownTotal: breakdown?.total_amount ?? breakdown?.user_paid,
       baseAmount: packageAmount,
       serviceCharge,
