@@ -74,7 +74,7 @@ export function BusinessSidebar({ onNavigate }: { onNavigate?: () => void }) {
           </div>
         </div>
 
-        <nav className="flex-1 overflow-y-auto p-3">
+        <nav className="business_sidebar_nav">
           <ul className="space-y-1">
             {visibleItems.map((item) => {
               const active =
