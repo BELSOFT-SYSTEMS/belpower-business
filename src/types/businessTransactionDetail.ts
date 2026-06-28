@@ -90,6 +90,7 @@ export type BusinessTransactionDetail = {
       total_amount?: number;
     };
     expected_amount?: number;
+    requested_amount?: number | string;
     pricing?: {
       total_amount?: number;
       service_charge?: number;
