@@ -2,6 +2,8 @@
  * Transaction / provider icons — aligned with belpower-frontend iconUtils
  */
 
+import { getDiscoLogoPath } from '@/utils/discoLogoMap';
+
 export type TransactionIconInput = {
   type: string;
   provider?: string;
@@ -32,6 +34,7 @@ export function getTransactionIcon(transaction: TransactionIconInput): string {
       dstv: '/dstv.svg',
       gotv: '/gotv.jpg',
       startimes: '/startimes.svg',
+      showmax: '/showmax.png',
     };
     return cableMap[providerLower] || '/Tv.png';
   }
@@ -50,34 +53,7 @@ export function getTransactionIcon(transaction: TransactionIconInput): string {
 }
 
 export function getDiscoIcon(discoCode: string): string {
-  const providerLower = (discoCode || '').toLowerCase();
-  const discoMap: Record<string, string> = {
-    aedc: '/aedc.png',
-    abuja: '/aedc.png',
-    ekedc: '/ekedc.png',
-    eko: '/ekedc.png',
-    ikedc: '/ikedc.png',
-    ikeja: '/ikedc.png',
-    ibadan: '/ibedc.png',
-    ibedc: '/ibedc.png',
-    enugu: '/eedc.png',
-    eedc: '/eedc.png',
-    jos: '/jedc.png',
-    jedc: '/jedc.png',
-    kaduna: '/kaedc.png',
-    kaedc: '/kaedc.png',
-    kaedco: '/kaedc.png',
-    kano: '/kedc.png',
-    kedco: '/kedc.png',
-    ph: '/phedc.jpeg',
-    phedc: '/phedc.jpeg',
-    phed: '/phedc.jpeg',
-    benin: '/bedc.png',
-    bedc: '/bedc.png',
-    yola: '/yedc.png',
-    yedc: '/yedc.png',
-  };
-  return discoMap[providerLower] || '/electricity.png';
+  return getDiscoLogoPath(discoCode);
 }
 
 /** Provider logo for receipt PDF header — matches belpower-admin / frontend. */
