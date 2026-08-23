@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import { cn } from '@/lib/utils';
+import { applyOtpDigitInput } from '@/lib/otpInput';
 
 type OtpInputProps = {
   length?: number;
@@ -26,21 +27,17 @@ export function OtpInput({
     }
   }, [error, value.length]);
 
-  const handleKeyDown = (index: number, event: React.KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === 'Backspace' && !event.currentTarget.value && index > 0) {
-      inputRefs.current[index - 1]?.focus();
+  const applyInput = (index: number, rawValue: string) => {
+    const { value: nextValue, focusIndex } = applyOtpDigitInput(value, rawValue, index, length);
+    onChange(nextValue);
+    if (nextValue) {
+      inputRefs.current[focusIndex]?.focus();
     }
   };
 
-  const handleInput = (index: number, event: React.ChangeEvent<HTMLInputElement>) => {
-    const digit = event.target.value.replace(/\D/g, '').slice(-1);
-    const digits = value.padEnd(length, ' ').split('');
-    digits[index] = digit;
-    const next = digits.join('').replace(/\s/g, '').slice(0, length);
-    onChange(next);
-
-    if (digit && index < length - 1) {
-      inputRefs.current[index + 1]?.focus();
+  const handleKeyDown = (index: number, event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Backspace' && !value[index] && index > 0) {
+      inputRefs.current[index - 1]?.focus();
     }
   };
 
@@ -55,9 +52,10 @@ export function OtpInput({
             }}
             type="text"
             inputMode="numeric"
-            maxLength={1}
+            maxLength={length}
             value={value[index] ?? ''}
             disabled={disabled}
+            autoComplete={index === 0 ? 'one-time-code' : 'off'}
             aria-label={`OTP digit ${index + 1}`}
             className={cn(
               'h-12 w-11 rounded-xl border text-center text-lg font-semibold outline-none transition focus:border-blue-normal focus:ring-2 focus:ring-blue-normal/20',
@@ -65,7 +63,11 @@ export function OtpInput({
               disabled && 'cursor-not-allowed bg-gray-50 opacity-70',
             )}
             onKeyDown={(event) => handleKeyDown(index, event)}
-            onChange={(event) => handleInput(index, event)}
+            onChange={(event) => applyInput(index, event.target.value)}
+            onPaste={(event) => {
+              event.preventDefault();
+              applyInput(index, event.clipboardData.getData('text'));
+            }}
           />
         ))}
       </div>
