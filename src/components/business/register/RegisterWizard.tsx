@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Check, ChevronLeft, Loader2 } from 'lucide-react';
@@ -9,6 +8,7 @@ import { OtpInput } from '@/components/business/register/OtpInput';
 import { PasswordFieldWithRequirements } from '@/components/business/PasswordFieldWithRequirements';
 import { PasswordInput } from '@/components/business/PasswordInput';
 import { getElectricityProviderOptions } from '@/constants/discoNames';
+import { BELPOWER_LEGAL_URLS } from '@/constants/legalUrls';
 import { isBusinessPasswordValid, validateBusinessPassword } from '@/constants/passwordPolicy';
 import {
   isMeterNumberLongEnough,
@@ -397,7 +397,16 @@ export function RegisterWizard({ onComplete }: RegisterWizardProps) {
       onComplete?.();
       router.push('/business');
     } catch (error) {
-      toast.error(apiErrorMessage(error, 'Registration failed.'));
+      const code =
+        error instanceof BusinessApiError ? error.code : undefined;
+      if (code === 'VERIFICATION_EXPIRED' || code === 'INVALID_VERIFICATION_ID') {
+        setMeterVerified(false);
+        setVerificationId('');
+        setStep(1);
+        toast.error('Meter verification expired. Please verify your meter again.');
+      } else {
+        toast.error(apiErrorMessage(error, 'Registration failed.'));
+      }
     } finally {
       setSubmitting(false);
     }
@@ -755,13 +764,26 @@ export function RegisterWizard({ onComplete }: RegisterWizardProps) {
 
             <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm leading-relaxed text-gray-600">
               <p>
-                By creating a BelPower Business account, you agree to our Terms of Use and Privacy
-                Policy. You confirm that you are authorized to register this business and manage
-                utility payments on its behalf.
-              </p>
-              <p className="mt-3">
-                Meter verification ID:{' '}
-                <span className="font-mono text-gray-800">{verificationId || '—'}</span>
+                By creating a BelPower Business account, you agree to our{' '}
+                <a
+                  href={BELPOWER_LEGAL_URLS.termsOfUse}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-medium text-blue-normal hover:underline"
+                >
+                  Terms of Use
+                </a>{' '}
+                and{' '}
+                <a
+                  href={BELPOWER_LEGAL_URLS.privacyPolicy}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-medium text-blue-normal hover:underline"
+                >
+                  Privacy Policy
+                </a>
+                . You confirm that you are authorized to register this business and manage utility
+                payments on its behalf.
               </p>
             </div>
 
@@ -774,13 +796,23 @@ export function RegisterWizard({ onComplete }: RegisterWizardProps) {
               />
               <span>
                 I agree to the BelPower Business{' '}
-                <Link href="#" className="font-medium text-blue-normal hover:underline">
+                <a
+                  href={BELPOWER_LEGAL_URLS.termsOfUse}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-medium text-blue-normal hover:underline"
+                >
                   Terms of Use
-                </Link>{' '}
+                </a>{' '}
                 and{' '}
-                <Link href="#" className="font-medium text-blue-normal hover:underline">
+                <a
+                  href={BELPOWER_LEGAL_URLS.privacyPolicy}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-medium text-blue-normal hover:underline"
+                >
                   Privacy Policy
-                </Link>
+                </a>
                 .
               </span>
             </label>
