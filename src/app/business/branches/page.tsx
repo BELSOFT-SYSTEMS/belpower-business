@@ -1,8 +1,12 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { MapPin, MoreVertical, Plus, Trash2, Users, Wallet, Zap } from 'lucide-react';
+import { MapPin, Plus, Trash2, Users, Wallet, Zap } from 'lucide-react';
 import { toast } from 'sonner';
+import {
+  BusinessActionsMenu,
+  BusinessActionsMenuItem,
+} from '@/components/business/BusinessActionsMenu';
 import { BusinessFormModal } from '@/components/business/BusinessFormModal';
 import { AddBranchModal } from '@/components/business/AddBranchModal';
 import { EmptyState } from '@/components/business/EmptyState';
@@ -269,10 +273,9 @@ export default function BranchesPage() {
           ) : (
             <>
               <ul className="divide-y divide-gray-100 overflow-visible">
-                {pagedBranches.map((branch, index) => {
+                {pagedBranches.map((branch) => {
                   const wallet = walletByBranchId.get(branch.id);
                   const disabled = branch.status === 'inactive';
-                  const openMenuUpward = index >= pagedBranches.length - 2;
                   return (
                     <li
                       key={branch.id}
@@ -347,46 +350,27 @@ export default function BranchesPage() {
                         </div>
 
                         {isSuperAdmin ? (
-                          <div className="relative z-10 self-end lg:self-center">
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setMenuOpenId((current) =>
-                                  current === branch.id ? null : branch.id,
-                                )
-                              }
-                              className="rounded-lg p-2 text-gray-500 hover:bg-white hover:text-gray-800"
-                              aria-label={`${branch.name} actions`}
+                          <div className="self-end lg:self-center">
+                            <BusinessActionsMenu
+                              label={`${branch.name} actions`}
+                              open={menuOpenId === branch.id}
+                              onOpenChange={(open) => setMenuOpenId(open ? branch.id : null)}
+                              menuClassName="w-44"
                             >
-                              <MoreVertical className="h-4 w-4" />
-                            </button>
-                            {menuOpenId === branch.id ? (
-                              <div
-                                className={cn(
-                                  'absolute right-0 z-30 w-44 rounded-xl border border-gray-200 bg-white py-1 shadow-lg',
-                                  openMenuUpward ? 'bottom-full mb-1' : 'top-full mt-1',
-                                )}
+                              <BusinessActionsMenuItem onClick={() => handleToggleStatus(branch)}>
+                                {branch.status === 'active' ? 'Disable branch' : 'Enable branch'}
+                              </BusinessActionsMenuItem>
+                              <BusinessActionsMenuItem
+                                destructive
+                                onClick={() => {
+                                  setMenuOpenId(null);
+                                  setDeleteTarget(branch);
+                                }}
                               >
-                                <button
-                                  type="button"
-                                  onClick={() => handleToggleStatus(branch)}
-                                  className="block w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
-                                >
-                                  {branch.status === 'active' ? 'Disable branch' : 'Enable branch'}
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setMenuOpenId(null);
-                                    setDeleteTarget(branch);
-                                  }}
-                                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50"
-                                >
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                  Disable branch
-                                </button>
-                              </div>
-                            ) : null}
+                                <Trash2 className="h-3.5 w-3.5" />
+                                Disable branch
+                              </BusinessActionsMenuItem>
+                            </BusinessActionsMenu>
                           </div>
                         ) : null}
                       </div>

@@ -10,6 +10,8 @@ export type BusinessSelectOption = {
   disabled?: boolean;
 };
 
+type PanelPosition = { top: number; left: number; width: number };
+
 type BusinessSelectProps = {
   id?: string;
   name?: string;
@@ -46,6 +48,7 @@ export function BusinessSelect({
   const listboxId = `${id}-listbox`;
   const [open, setOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [position, setPosition] = useState<PanelPosition | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const selected = options.find((option) => option.value === value);
@@ -60,6 +63,7 @@ export function BusinessSelect({
   const close = useCallback(() => {
     setOpen(false);
     setSearchQuery('');
+    setPosition(null);
   }, []);
 
   useEffect(() => {
@@ -75,11 +79,20 @@ export function BusinessSelect({
       if (event.key === 'Escape') close();
     };
 
+    const onScroll = (event: Event) => {
+      if (event.target instanceof Node && containerRef.current?.contains(event.target)) {
+        return;
+      }
+      close();
+    };
+
     window.addEventListener('mousedown', onPointerDown);
     window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('scroll', onScroll, true);
     return () => {
       window.removeEventListener('mousedown', onPointerDown);
       window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('scroll', onScroll, true);
     };
   }, [close, open]);
 
@@ -103,8 +116,19 @@ export function BusinessSelect({
         aria-expanded={open}
         aria-controls={listboxId}
         aria-label={ariaLabel}
-        onClick={() => {
-          if (!disabled) setOpen((current) => !current);
+        onClick={(event) => {
+          if (disabled) return;
+          if (open) {
+            close();
+            return;
+          }
+          const rect = event.currentTarget.getBoundingClientRect();
+          setPosition({
+            top: rect.bottom + 4,
+            left: rect.left,
+            width: rect.width,
+          });
+          setOpen(true);
         }}
         className={cn(
           'flex items-center justify-between gap-3 rounded-xl border border-gray-300 bg-white px-4 py-3 text-left text-sm outline-none transition',
@@ -126,12 +150,17 @@ export function BusinessSelect({
         />
       </button>
 
-      {open && !disabled ? (
+      {open && !disabled && position ? (
         <div
           className={cn(
-            'absolute z-50 mt-1 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg',
-            fitContent ? 'min-w-full w-max' : 'w-full',
+            'fixed z-50 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg',
+            fitContent && 'w-max min-w-0',
           )}
+          style={
+            fitContent
+              ? { top: position.top, left: position.left, minWidth: position.width }
+              : { top: position.top, left: position.left, width: position.width }
+          }
         >
           {searchable ? (
             <div className="border-b border-gray-100 p-2">

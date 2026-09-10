@@ -467,7 +467,29 @@ export function ProviderTiles({
   );
 }
 
-export const PLAN_PACKAGE_PAGE_SIZE = 6;
+/** Max rows of plan/package cards per page on all viewports. */
+export const PLAN_PACKAGE_ROWS = 3;
+/** Columns from `sm` breakpoint (`sm:grid-cols-2`). */
+export const PLAN_PACKAGE_COLS_SM = 2;
+/** Desktop page size (3 rows × 2 cols). Mobile uses PLAN_PACKAGE_ROWS. */
+export const PLAN_PACKAGE_PAGE_SIZE = PLAN_PACKAGE_ROWS * PLAN_PACKAGE_COLS_SM;
+
+/** 3 items on mobile (1 col × 3 rows), 6 from `sm` up (2 cols × 3 rows). */
+export function usePlanPackagePageSize() {
+  const [pageSize, setPageSize] = useState(PLAN_PACKAGE_ROWS);
+
+  useEffect(() => {
+    const media = window.matchMedia('(min-width: 640px)');
+    const sync = () => {
+      setPageSize(media.matches ? PLAN_PACKAGE_PAGE_SIZE : PLAN_PACKAGE_ROWS);
+    };
+    sync();
+    media.addEventListener('change', sync);
+    return () => media.removeEventListener('change', sync);
+  }, []);
+
+  return pageSize;
+}
 
 export function usePagedItems<T>(items: T[], resetKey: string, pageSize = PLAN_PACKAGE_PAGE_SIZE) {
   const [page, setPage] = useState(0);
@@ -475,7 +497,7 @@ export function usePagedItems<T>(items: T[], resetKey: string, pageSize = PLAN_P
 
   useEffect(() => {
     setPage(0);
-  }, [resetKey]);
+  }, [resetKey, pageSize]);
 
   useEffect(() => {
     setPage((current) => Math.min(current, pageCount - 1));
@@ -505,19 +527,19 @@ export function OptionPager({
   if (pageCount <= 1) return null;
 
   return (
-    <div className="mt-3 flex items-center justify-between gap-3">
+    <div className="mt-3 flex items-center justify-between gap-2">
       <button
         type="button"
         onClick={() => onPageChange(Math.max(0, page - 1))}
         disabled={page === 0}
-        className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+        className="inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
         aria-label="Previous page"
       >
         <ChevronLeft className="h-4 w-4" />
-        Previous
+        <span className="hidden sm:inline">Previous</span>
       </button>
 
-      <div className="flex items-center gap-1.5" role="tablist" aria-label="Pages">
+      <div className="flex min-w-0 flex-wrap items-center justify-center gap-1.5" role="tablist" aria-label="Pages">
         {Array.from({ length: pageCount }, (_, index) => {
           const active = index === page;
           return (
@@ -541,10 +563,10 @@ export function OptionPager({
         type="button"
         onClick={() => onPageChange(Math.min(pageCount - 1, page + 1))}
         disabled={page >= pageCount - 1}
-        className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+        className="inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
         aria-label="Next page"
       >
-        Next
+        <span className="hidden sm:inline">Next</span>
         <ChevronRight className="h-4 w-4" />
       </button>
     </div>

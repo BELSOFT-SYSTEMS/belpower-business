@@ -1,7 +1,11 @@
 'use client';
 
 import Image from 'next/image';
-import { ChevronDown, Lock, MoreVertical, Trash2, Users } from 'lucide-react';
+import { ChevronDown, Lock, Trash2, Users } from 'lucide-react';
+import {
+  BusinessActionsMenu,
+  BusinessActionsMenuItem,
+} from '@/components/business/BusinessActionsMenu';
 import { secondaryButtonClass } from '@/components/business/payments/paymentShared';
 import { getProviderLogo, getProviderName } from '@/data/mockPaymentCatalog';
 import type { BeneficiaryGroup } from '@/types/business';
@@ -15,7 +19,7 @@ export function BeneficiaryGroupCard({
   canBulk,
   menuOpen,
   onToggleExpand,
-  onToggleMenu,
+  onOpenChange,
   onDelete,
   onSetPrimary,
 }: {
@@ -26,7 +30,7 @@ export function BeneficiaryGroupCard({
   canBulk: boolean;
   menuOpen: boolean;
   onToggleExpand: () => void;
-  onToggleMenu: () => void;
+  onOpenChange: (open: boolean) => void;
   onDelete: () => void;
   onSetPrimary: () => void;
 }) {
@@ -67,37 +71,22 @@ export function BeneficiaryGroupCard({
             </div>
 
             {canManage ? (
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={onToggleMenu}
-                  className="rounded-lg p-2 text-gray-500 hover:bg-white hover:text-gray-800"
-                  aria-label={`${group.name} options`}
-                >
-                  <MoreVertical className="h-4 w-4" />
-                </button>
-                {menuOpen ? (
-                  <div className="absolute right-0 z-20 mt-1 w-44 overflow-hidden rounded-xl border border-gray-200 bg-white py-1 shadow-lg">
-                    {!group.isPrimary ? (
-                      <button
-                        type="button"
-                        onClick={onSetPrimary}
-                        className="block w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
-                      >
-                        Set as primary
-                      </button>
-                    ) : null}
-                    <button
-                      type="button"
-                      onClick={onDelete}
-                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                      Delete group
-                    </button>
-                  </div>
+              <BusinessActionsMenu
+                label={`${group.name} options`}
+                open={menuOpen}
+                onOpenChange={onOpenChange}
+                menuClassName="w-44"
+              >
+                {!group.isPrimary ? (
+                  <BusinessActionsMenuItem onClick={onSetPrimary}>
+                    Set as primary
+                  </BusinessActionsMenuItem>
                 ) : null}
-              </div>
+                <BusinessActionsMenuItem destructive onClick={onDelete}>
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Delete group
+                </BusinessActionsMenuItem>
+              </BusinessActionsMenu>
             ) : null}
           </div>
 

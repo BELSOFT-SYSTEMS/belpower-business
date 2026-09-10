@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Check, ChevronDown, Search } from 'lucide-react';
 import { getDiscoLogoPath } from '@/utils/discoLogoMap';
 import { cn } from '@/lib/utils';
@@ -10,6 +10,8 @@ export type ElectricityDiscoOption = {
   name: string;
   available?: boolean;
 };
+
+type PanelPosition = { top: number; left: number; width: number };
 
 function DiscoLogo({ code, size = 28 }: { code: string; size?: number }) {
   const [src, setSrc] = useState(() => getDiscoLogoPath(code));
@@ -58,6 +60,7 @@ export function ElectricityDiscoSelector({
   const listboxId = `${generatedId}-listbox`;
   const [open, setOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [position, setPosition] = useState<PanelPosition | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const selectedDisco = discos.find((disco) => disco.code === selectedCode);
@@ -71,36 +74,46 @@ export function ElectricityDiscoSelector({
     );
   }, [discos, searchQuery]);
 
+  const close = useCallback(() => {
+    setOpen(false);
+    setSearchQuery('');
+    setPosition(null);
+  }, []);
+
   useEffect(() => {
     if (!open) return;
 
     const onPointerDown = (event: MouseEvent) => {
       if (!containerRef.current?.contains(event.target as Node)) {
-        setOpen(false);
-        setSearchQuery('');
+        close();
       }
     };
 
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setOpen(false);
-        setSearchQuery('');
+      if (event.key === 'Escape') close();
+    };
+
+    const onScroll = (event: Event) => {
+      if (event.target instanceof Node && containerRef.current?.contains(event.target)) {
+        return;
       }
+      close();
     };
 
     window.addEventListener('mousedown', onPointerDown);
     window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('scroll', onScroll, true);
     return () => {
       window.removeEventListener('mousedown', onPointerDown);
       window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('scroll', onScroll, true);
     };
-  }, [open]);
+  }, [close, open]);
 
   const handleSelect = (code: string, available = true) => {
     if (!available) return;
     onSelect(code);
-    setOpen(false);
-    setSearchQuery('');
+    close();
   };
 
   return (
@@ -119,8 +132,19 @@ export function ElectricityDiscoSelector({
           aria-haspopup="listbox"
           aria-expanded={open}
           aria-controls={listboxId}
-          onClick={() => {
-            if (!disabled) setOpen((current) => !current);
+          onClick={(event) => {
+            if (disabled) return;
+            if (open) {
+              close();
+              return;
+            }
+            const rect = event.currentTarget.getBoundingClientRect();
+            setPosition({
+              top: rect.bottom + 4,
+              left: rect.left,
+              width: rect.width,
+            });
+            setOpen(true);
           }}
           className={cn(
             'flex w-full items-center gap-3 rounded-xl border border-gray-300 bg-white px-4 py-3 text-left text-sm outline-none transition',
@@ -143,8 +167,11 @@ export function ElectricityDiscoSelector({
           />
         </button>
 
-        {open && !disabled ? (
-          <div className="absolute z-50 mt-1 w-full overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg">
+        {open && !disabled && position ? (
+          <div
+            className="fixed z-50 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg"
+            style={{ top: position.top, left: position.left, width: position.width }}
+          >
             <div className="border-b border-gray-100 p-2">
               <div className="relative">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />

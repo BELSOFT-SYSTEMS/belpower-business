@@ -1,9 +1,13 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { MoreVertical, Trash2, UserPlus } from 'lucide-react';
+import { Trash2, UserPlus } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { toast } from 'sonner';
+import {
+  BusinessActionsMenu,
+  BusinessActionsMenuItem,
+} from '@/components/business/BusinessActionsMenu';
 import { BusinessFormModal } from '@/components/business/BusinessFormModal';
 import { BusinessSelect } from '@/components/business/BusinessSelect';
 import { EmptyState } from '@/components/business/EmptyState';
@@ -34,38 +38,8 @@ export default function TeamPage() {
   const [branches, setBranches] = useState<BusinessBranch[]>([]);
   const [loading, setLoading] = useState(true);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
-  const [menuPosition, setMenuPosition] = useState<{ top: number; right: number } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<BusinessTeamMember | null>(null);
   const [suspendTarget, setSuspendTarget] = useState<BusinessTeamMember | null>(null);
-
-  useEffect(() => {
-    if (!menuOpenId) return;
-
-    const close = () => {
-      setMenuOpenId(null);
-      setMenuPosition(null);
-    };
-    const onPointerDown = (event: MouseEvent) => {
-      const target = event.target as HTMLElement | null;
-      if (target?.closest('[data-team-actions-menu]') || target?.closest('[data-team-actions-trigger]')) {
-        return;
-      }
-      close();
-    };
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') close();
-    };
-    const onScroll = () => close();
-
-    window.addEventListener('mousedown', onPointerDown);
-    window.addEventListener('keydown', onKeyDown);
-    window.addEventListener('scroll', onScroll, true);
-    return () => {
-      window.removeEventListener('mousedown', onPointerDown);
-      window.removeEventListener('keydown', onKeyDown);
-      window.removeEventListener('scroll', onScroll, true);
-    };
-  }, [menuOpenId]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -190,7 +164,6 @@ export default function TeamPage() {
       await businessTeamApi.remove(deleteTarget.id);
       setDeleteTarget(null);
       setMenuOpenId(null);
-      setMenuPosition(null);
       toast.success(`${name} removed from team`);
       await load();
     } catch (error) {
@@ -210,7 +183,6 @@ export default function TeamPage() {
       );
       setSuspendTarget(null);
       setMenuOpenId(null);
-      setMenuPosition(null);
       await load();
     } catch (error) {
       toast.error(error instanceof BusinessApiError ? error.message : 'Could not update member');
@@ -321,87 +293,49 @@ export default function TeamPage() {
                       {canManageTeam ? (
                         <td className="whitespace-nowrap px-4 py-3 text-right">
                           {showActions ? (
-                            <div className="relative inline-flex justify-end">
-                              <button
-                                type="button"
-                                data-team-actions-trigger
-                                onClick={(event) => {
-                                  const rect = event.currentTarget.getBoundingClientRect();
-                                  setMenuOpenId((current) => {
-                                    if (current === member.id) {
-                                      setMenuPosition(null);
-                                      return null;
+                            <BusinessActionsMenu
+                              label={`${member.firstName} ${member.lastName} actions`}
+                              open={menuOpenId === member.id}
+                              onOpenChange={(open) => setMenuOpenId(open ? member.id : null)}
+                            >
+                              {canCopyInvite ? (
+                                <BusinessActionsMenuItem
+                                  onClick={async () => {
+                                    setMenuOpenId(null);
+                                    try {
+                                      await navigator.clipboard.writeText(member.inviteUrl!);
+                                      toast.success('Invite link copied');
+                                    } catch {
+                                      toast.error('Could not copy invite link');
                                     }
-                                    setMenuPosition({
-                                      top: rect.bottom + 4,
-                                      right: Math.max(8, window.innerWidth - rect.right),
-                                    });
-                                    return member.id;
-                                  });
-                                }}
-                                className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-800"
-                                aria-label={`${member.firstName} ${member.lastName} actions`}
-                                aria-expanded={menuOpenId === member.id}
-                              >
-                                <MoreVertical className="h-4 w-4" />
-                              </button>
-                              {menuOpenId === member.id && menuPosition ? (
-                                <div
-                                  data-team-actions-menu
-                                  className="fixed z-50 w-48 rounded-xl border border-gray-200 bg-white py-1 shadow-lg"
-                                  style={{
-                                    top: menuPosition.top,
-                                    right: menuPosition.right,
                                   }}
                                 >
-                                  {canCopyInvite ? (
-                                    <button
-                                      type="button"
-                                      onClick={async () => {
-                                        setMenuOpenId(null);
-                                        setMenuPosition(null);
-                                        try {
-                                          await navigator.clipboard.writeText(member.inviteUrl!);
-                                          toast.success('Invite link copied');
-                                        } catch {
-                                          toast.error('Could not copy invite link');
-                                        }
-                                      }}
-                                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
-                                    >
-                                      Copy invite link
-                                    </button>
-                                  ) : null}
-                                  {canSuspend ? (
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setMenuOpenId(null);
-                                        setMenuPosition(null);
-                                        setSuspendTarget(member);
-                                      }}
-                                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
-                                    >
-                                      {member.status === 'suspended' ? 'Reactivate' : 'Suspend'}
-                                    </button>
-                                  ) : null}
-                                  {canDelete ? (
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setMenuOpenId(null);
-                                        setMenuPosition(null);
-                                        setDeleteTarget(member);
-                                      }}
-                                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50"
-                                    >
-                                      <Trash2 className="h-3.5 w-3.5" />
-                                      Remove member
-                                    </button>
-                                  ) : null}
-                                </div>
+                                  Copy invite link
+                                </BusinessActionsMenuItem>
                               ) : null}
-                            </div>
+                              {canSuspend ? (
+                                <BusinessActionsMenuItem
+                                  onClick={() => {
+                                    setMenuOpenId(null);
+                                    setSuspendTarget(member);
+                                  }}
+                                >
+                                  {member.status === 'suspended' ? 'Reactivate' : 'Suspend'}
+                                </BusinessActionsMenuItem>
+                              ) : null}
+                              {canDelete ? (
+                                <BusinessActionsMenuItem
+                                  destructive
+                                  onClick={() => {
+                                    setMenuOpenId(null);
+                                    setDeleteTarget(member);
+                                  }}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                  Remove member
+                                </BusinessActionsMenuItem>
+                              ) : null}
+                            </BusinessActionsMenu>
                           ) : (
                             <span className="text-xs text-gray-400">—</span>
                           )}

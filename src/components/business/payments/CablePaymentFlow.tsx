@@ -35,6 +35,7 @@ import {
   fieldClass,
   usePagedItems,
   usePaymentSession,
+  usePlanPackagePageSize,
 } from '@/components/business/payments/paymentShared';
 
 type View = 'form' | 'success' | 'failed' | 'pending';
@@ -102,12 +103,13 @@ export function CablePaymentFlow() {
   const selectedPackage = packages.find((item) => item.code === packageKey) ?? null;
   const amount = selectedPackage?.amount ?? 0;
   const phoneOk = isValidNigerianPhone(phone);
+  const packagePageSize = usePlanPackagePageSize();
   const {
     pageItems: visiblePackages,
     page: packagePage,
     pageCount: packagePageCount,
     setPage: setPackagePage,
-  } = usePagedItems(packages, provider);
+  } = usePagedItems(packages, provider, packagePageSize);
 
   const preferredPackage = params.get('package') ?? '';
 
@@ -344,7 +346,9 @@ export function CablePaymentFlow() {
                               : 'border-gray-200 hover:border-gray-300',
                           )}
                         >
-                          <p className="text-sm font-semibold text-gray-900">{item.name}</p>
+                          <p className="line-clamp-2 break-words text-sm font-semibold text-gray-900">
+                            {item.name}
+                          </p>
                           <p className="mt-1 text-sm text-gray-600">{formatPrice(item.amount)}</p>
                         </button>
                       );

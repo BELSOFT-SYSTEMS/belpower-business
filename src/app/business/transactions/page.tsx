@@ -154,7 +154,7 @@ export default function TransactionsPage() {
         />
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white p-3 shadow-sm sm:p-4">
         <BusinessTransactionList
           transactions={filtered}
           emptyMessage={

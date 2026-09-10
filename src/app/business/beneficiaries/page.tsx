@@ -3,8 +3,12 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { CheckCircle2, MoreVertical, Plus, Trash2 } from 'lucide-react';
+import { CheckCircle2, Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
+import {
+  BusinessActionsMenu,
+  BusinessActionsMenuItem,
+} from '@/components/business/BusinessActionsMenu';
 import { EmptyState } from '@/components/business/EmptyState';
 import { PageHeader } from '@/components/business/PageHeader';
 import { ElectricityDiscoSelector } from '@/components/business/payments/ElectricityDiscoSelector';
@@ -106,6 +110,7 @@ function newDraftMember(provider = 'mtn'): DraftGroupMember {
 const SERVICE_TABS: {
   id: BeneficiaryService;
   label: string;
+  shortLabel: string;
   singular: string;
   primaryTitle: string;
   savedTitle: string;
@@ -115,6 +120,7 @@ const SERVICE_TABS: {
   {
     id: 'electricity',
     label: 'Electricity',
+    shortLabel: 'Electricity',
     singular: 'meter',
     primaryTitle: 'Primary meter',
     savedTitle: 'Saved meters',
@@ -124,6 +130,7 @@ const SERVICE_TABS: {
   {
     id: 'phone',
     label: 'Phone Numbers',
+    shortLabel: 'Phone',
     singular: 'number',
     primaryTitle: 'Primary number',
     savedTitle: 'Saved numbers',
@@ -133,6 +140,7 @@ const SERVICE_TABS: {
   {
     id: 'cable',
     label: 'Cable TV',
+    shortLabel: 'Cable',
     singular: 'smartcard',
     primaryTitle: 'Primary smartcard',
     savedTitle: 'Saved smartcards',
@@ -761,7 +769,7 @@ export default function BeneficiariesPage() {
         ) : null}
       </div>
 
-      <div className="flex gap-1 overflow-x-auto rounded-xl border border-gray-200 bg-white p-1 shadow-sm">
+      <div className="flex gap-1 rounded-xl border border-gray-200 bg-white p-1 shadow-sm">
         {SERVICE_TABS.map((item) => {
           const active = item.id === service;
           const singleCount =
@@ -783,14 +791,15 @@ export default function BeneficiariesPage() {
               type="button"
               onClick={() => setService(item.id)}
               className={cn(
-                'flex-1 whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium transition',
+                'min-w-0 flex-1 rounded-lg px-2 py-2 text-xs font-medium transition sm:px-3 sm:text-sm',
                 active
                   ? 'bg-blue-normal text-white'
                   : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900',
               )}
             >
-              {item.label}
-              <span className={cn('ml-1.5 text-xs', active ? 'text-white/80' : 'text-gray-400')}>
+              <span className="sm:hidden">{item.shortLabel}</span>
+              <span className="hidden sm:inline">{item.label}</span>
+              <span className={cn('ml-1 text-xs sm:ml-1.5', active ? 'text-white/80' : 'text-gray-400')}>
                 {count}
               </span>
             </button>
@@ -802,8 +811,8 @@ export default function BeneficiariesPage() {
         <div className="flex gap-1 rounded-xl border border-gray-200 bg-gray-50 p-1">
           {(
             [
-              { id: 'groups' as const, label: 'Number groups', count: serviceGroups.length },
-              { id: 'singles' as const, label: 'Single numbers', count: serviceItems.length },
+              { id: 'groups' as const, label: 'Number groups', shortLabel: 'Groups', count: serviceGroups.length },
+              { id: 'singles' as const, label: 'Single numbers', shortLabel: 'Singles', count: serviceItems.length },
             ] as const
           ).map((sub) => {
             const active = phoneSubTab === sub.id;
@@ -813,14 +822,15 @@ export default function BeneficiariesPage() {
                 type="button"
                 onClick={() => setPhoneSubTab(sub.id)}
                 className={cn(
-                  'flex-1 rounded-lg px-3 py-2 text-sm font-medium transition',
+                  'min-w-0 flex-1 rounded-lg px-2 py-2 text-xs font-medium transition sm:px-3 sm:text-sm',
                   active
                     ? 'bg-white text-gray-900 shadow-sm'
                     : 'text-gray-600 hover:text-gray-900',
                 )}
               >
-                {sub.label}
-                <span className={cn('ml-1.5 text-xs', active ? 'text-gray-500' : 'text-gray-400')}>
+                <span className="sm:hidden">{sub.shortLabel}</span>
+                <span className="hidden sm:inline">{sub.label}</span>
+                <span className={cn('ml-1 text-xs sm:ml-1.5', active ? 'text-gray-500' : 'text-gray-400')}>
                   {sub.count}
                 </span>
               </button>
@@ -872,11 +882,7 @@ export default function BeneficiariesPage() {
                     current === primaryGroup.id ? null : primaryGroup.id,
                   )
                 }
-                onToggleMenu={() =>
-                  setGroupMenuOpenId((current) =>
-                    current === primaryGroup.id ? null : primaryGroup.id,
-                  )
-                }
+                onOpenChange={(open) => setGroupMenuOpenId(open ? primaryGroup.id : null)}
                 onDelete={() => handleDeleteGroup(primaryGroup.id)}
                 onSetPrimary={() => handleSetPrimaryGroup(primaryGroup.id)}
               />
@@ -892,9 +898,7 @@ export default function BeneficiariesPage() {
                 onToggleExpand={() =>
                   setExpandedGroupId((current) => (current === group.id ? null : group.id))
                 }
-                onToggleMenu={() =>
-                  setGroupMenuOpenId((current) => (current === group.id ? null : group.id))
-                }
+                onOpenChange={(open) => setGroupMenuOpenId(open ? group.id : null)}
                 onDelete={() => handleDeleteGroup(group.id)}
                 onSetPrimary={() => handleSetPrimaryGroup(group.id)}
               />
@@ -915,9 +919,7 @@ export default function BeneficiariesPage() {
             canPay={canPay}
             canManage={canManage}
             menuOpen={menuOpenId === primaryItem.id}
-            onToggleMenu={() =>
-              setMenuOpenId((current) => (current === primaryItem.id ? null : primaryItem.id))
-            }
+            onOpenChange={(open) => setMenuOpenId(open ? primaryItem.id : null)}
             onDelete={() => handleDelete(primaryItem.id)}
             onSetPrimary={() => handleSetPrimary(primaryItem.id)}
           />
@@ -936,9 +938,7 @@ export default function BeneficiariesPage() {
             canPay={canPay}
             canManage={canManage}
             menuOpen={menuOpenId === primaryItem.id}
-            onToggleMenu={() =>
-              setMenuOpenId((current) => (current === primaryItem.id ? null : primaryItem.id))
-            }
+            onOpenChange={(open) => setMenuOpenId(open ? primaryItem.id : null)}
             onDelete={() => handleDelete(primaryItem.id)}
             onSetPrimary={() => handleSetPrimary(primaryItem.id)}
           />
@@ -959,9 +959,7 @@ export default function BeneficiariesPage() {
                 canPay={canPay}
                 canManage={canManage}
                 menuOpen={menuOpenId === item.id}
-                onToggleMenu={() =>
-                  setMenuOpenId((current) => (current === item.id ? null : item.id))
-                }
+                onOpenChange={(open) => setMenuOpenId(open ? item.id : null)}
                 onDelete={() => handleDelete(item.id)}
                 onSetPrimary={() => handleSetPrimary(item.id)}
               />
@@ -984,9 +982,7 @@ export default function BeneficiariesPage() {
                 canPay={canPay}
                 canManage={canManage}
                 menuOpen={menuOpenId === item.id}
-                onToggleMenu={() =>
-                  setMenuOpenId((current) => (current === item.id ? null : item.id))
-                }
+                onOpenChange={(open) => setMenuOpenId(open ? item.id : null)}
                 onDelete={() => handleDelete(item.id)}
                 onSetPrimary={() => handleSetPrimary(item.id)}
               />
@@ -1349,7 +1345,7 @@ function BeneficiaryCard({
   canPay,
   canManage,
   menuOpen,
-  onToggleMenu,
+  onOpenChange,
   onDelete,
   onSetPrimary,
 }: {
@@ -1359,7 +1355,7 @@ function BeneficiaryCard({
   canPay: boolean;
   canManage: boolean;
   menuOpen: boolean;
-  onToggleMenu: () => void;
+  onOpenChange: (open: boolean) => void;
   onDelete: () => void;
   onSetPrimary: () => void;
 }) {
@@ -1418,37 +1414,22 @@ function BeneficiaryCard({
             </div>
 
             {canManage ? (
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={onToggleMenu}
-                  className="rounded-lg p-2 text-gray-500 hover:bg-white hover:text-gray-800"
-                  aria-label={`${singular} options`}
-                >
-                  <MoreVertical className="h-4 w-4" />
-                </button>
-                {menuOpen ? (
-                  <div className="absolute right-0 z-20 mt-1 w-44 overflow-hidden rounded-xl border border-gray-200 bg-white py-1 shadow-lg">
-                    {!item.isPrimary ? (
-                      <button
-                        type="button"
-                        onClick={onSetPrimary}
-                        className="block w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
-                      >
-                        Set as primary
-                      </button>
-                    ) : null}
-                    <button
-                      type="button"
-                      onClick={onDelete}
-                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                      Delete {singular}
-                    </button>
-                  </div>
+              <BusinessActionsMenu
+                label={`${singular} options`}
+                open={menuOpen}
+                onOpenChange={onOpenChange}
+                menuClassName="w-44"
+              >
+                {!item.isPrimary ? (
+                  <BusinessActionsMenuItem onClick={onSetPrimary}>
+                    Set as primary
+                  </BusinessActionsMenuItem>
                 ) : null}
-              </div>
+                <BusinessActionsMenuItem destructive onClick={onDelete}>
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Delete {singular}
+                </BusinessActionsMenuItem>
+              </BusinessActionsMenu>
             ) : null}
           </div>
 

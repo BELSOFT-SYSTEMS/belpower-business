@@ -34,6 +34,7 @@ import {
   fieldClass,
   usePagedItems,
   usePaymentSession,
+  usePlanPackagePageSize,
 } from '@/components/business/payments/paymentShared';
 
 type View = 'form' | 'success' | 'failed' | 'pending';
@@ -86,12 +87,13 @@ export function DataPaymentFlow() {
   const selectedPlan = plans.find((plan) => plan.code === planKey) ?? null;
   const amount = selectedPlan?.amount ?? 0;
   const phoneOk = isValidNigerianPhone(phone);
+  const planPageSize = usePlanPackagePageSize();
   const {
     pageItems: visiblePlans,
     page: planPage,
     pageCount: planPageCount,
     setPage: setPlanPage,
-  } = usePagedItems(plans, network);
+  } = usePagedItems(plans, network, planPageSize);
 
   const preferredPlan = params.get('dataPlan') ?? '';
 
@@ -309,7 +311,7 @@ export function DataPaymentFlow() {
                               : 'border-gray-200 hover:border-gray-300',
                           )}
                         >
-                          <p className="text-sm font-semibold text-gray-900">
+                          <p className="line-clamp-2 break-words text-sm font-semibold text-gray-900">
                             {plan.name}
                             {plan.validity ? ` · ${plan.validity}` : ''}
                           </p>

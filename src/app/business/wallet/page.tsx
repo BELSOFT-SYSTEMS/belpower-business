@@ -326,15 +326,15 @@ export default function WalletPage() {
         )}
       </div>
 
-      <section className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-gray-900">
+      <section className="min-w-0 rounded-xl border border-gray-200 bg-white p-3 shadow-sm sm:p-4">
+        <div className="mb-4 flex min-w-0 items-center justify-between gap-3">
+          <h2 className="min-w-0 truncate text-lg font-semibold text-gray-900">
             {viewingHeadOffice ? 'Head Office activity' : 'Recent activity'}
           </h2>
           {canAccess('transactions.view') ? (
             <Link
               href="/business/transactions"
-              className="text-sm font-medium text-blue-normal hover:underline"
+              className="shrink-0 text-sm font-medium text-blue-normal hover:underline"
             >
               View all
             </Link>

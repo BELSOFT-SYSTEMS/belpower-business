@@ -18,6 +18,8 @@ import {
 import { Calendar, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
+type PanelPosition = { top: number; left: number; width: number };
+
 type BusinessDatePickerProps = {
   id?: string;
   value: string | null;
@@ -30,6 +32,7 @@ type BusinessDatePickerProps = {
 };
 
 const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const CALENDAR_WIDTH = 320; // ~20rem
 
 function toDateKey(date: Date): string {
   return format(date, 'yyyy-MM-dd');
@@ -50,11 +53,15 @@ export function BusinessDatePicker({
   const calendarId = `${id}-calendar`;
   const containerRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
+  const [position, setPosition] = useState<PanelPosition | null>(null);
 
   const selectedDate = value ? parseISO(value) : null;
   const [viewMonth, setViewMonth] = useState(() => selectedDate ?? new Date());
 
-  const close = useCallback(() => setOpen(false), []);
+  const close = useCallback(() => {
+    setOpen(false);
+    setPosition(null);
+  }, []);
 
   useEffect(() => {
     if (value) {
@@ -75,11 +82,20 @@ export function BusinessDatePicker({
       if (event.key === 'Escape') close();
     };
 
+    const onScroll = (event: Event) => {
+      if (event.target instanceof Node && containerRef.current?.contains(event.target)) {
+        return;
+      }
+      close();
+    };
+
     window.addEventListener('mousedown', onPointerDown);
     window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('scroll', onScroll, true);
     return () => {
       window.removeEventListener('mousedown', onPointerDown);
       window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('scroll', onScroll, true);
     };
   }, [close, open]);
 
@@ -111,8 +127,24 @@ export function BusinessDatePicker({
         aria-expanded={open}
         aria-controls={calendarId}
         aria-label={ariaLabel}
-        onClick={() => {
-          if (!disabled) setOpen((current) => !current);
+        onClick={(event) => {
+          if (disabled) return;
+          if (open) {
+            close();
+            return;
+          }
+          const rect = event.currentTarget.getBoundingClientRect();
+          const width = Math.min(CALENDAR_WIDTH, window.innerWidth - 16);
+          const left = Math.min(
+            Math.max(8, rect.left),
+            Math.max(8, window.innerWidth - width - 8),
+          );
+          setPosition({
+            top: rect.bottom + 4,
+            left,
+            width,
+          });
+          setOpen(true);
         }}
         className={cn(
           'flex items-center justify-between gap-3 rounded-xl border border-gray-300 bg-white px-4 py-3 text-left text-sm outline-none transition',
@@ -135,12 +167,13 @@ export function BusinessDatePicker({
         />
       </button>
 
-      {open && !disabled ? (
+      {open && !disabled && position ? (
         <div
           id={calendarId}
           role="dialog"
           aria-labelledby={id}
-          className="absolute right-0 z-50 mt-1 w-[min(100vw-2rem,20rem)] rounded-xl border border-gray-200 bg-white p-4 shadow-lg"
+          className="fixed z-50 rounded-xl border border-gray-200 bg-white p-4 shadow-lg"
+          style={{ top: position.top, left: position.left, width: position.width }}
         >
           <div className="mb-3 flex items-center justify-between gap-2">
             <button

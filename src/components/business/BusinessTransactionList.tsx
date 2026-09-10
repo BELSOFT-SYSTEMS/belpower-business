@@ -102,12 +102,12 @@ export function BusinessTransactionList({
     <>
       <ul className="divide-y divide-gray-100">
         {rows.map((tx) => (
-          <li key={tx.id}>
+          <li key={tx.id} className="min-w-0">
             <button
               type="button"
               onClick={() => setSelectedId(tx.id)}
               className={cn(
-                'flex w-full items-center gap-3 py-3 text-left transition hover:bg-gray-50',
+                'flex w-full min-w-0 items-start gap-3 py-3 text-left transition hover:bg-gray-50',
                 'rounded-lg px-1 -mx-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-normal/30',
               )}
             >
@@ -116,17 +116,21 @@ export function BusinessTransactionList({
                 alt={tx.service}
                 width={36}
                 height={36}
-                className="rounded-lg bg-gray-50 p-1"
+                className="mt-0.5 shrink-0 rounded-lg bg-gray-50 p-1"
               />
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium text-gray-900">{serviceLabel(tx)}</p>
-                <p className="truncate text-xs text-gray-500">
+                <div className="flex items-start justify-between gap-2">
+                  <p className="min-w-0 truncate text-sm font-medium text-gray-900">
+                    {serviceLabel(tx)}
+                  </p>
+                  <p className="shrink-0 text-sm font-semibold tabular-nums text-gray-900">
+                    {formatPrice(tx.amount)}
+                  </p>
+                </div>
+                <p className="mt-0.5 truncate text-xs text-gray-500">
                   {formatBusinessBranchLabel(tx.branchName)} · {tx.userName}
                 </p>
-              </div>
-              <div className="shrink-0 text-right">
-                <p className="text-sm font-semibold text-gray-900">{formatPrice(tx.amount)}</p>
-                <div className="mt-1 flex items-center justify-end gap-2">
+                <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                   {showStatusBadge && <StatusBadge status={tx.status} />}
                   {showEntryTypeBadge && <StatusBadge status={tx.entryType} />}
                   <span className="text-xs text-gray-500">

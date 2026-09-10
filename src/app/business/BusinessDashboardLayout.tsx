@@ -64,7 +64,7 @@ function BusinessDashboardContent({ children }: { children: ReactNode }) {
       <div className="min-h-screen bg-gray-50">
         <BusinessTopBar onMenuClick={() => setMobileNavOpen((v) => !v)} />
         <div className="pt-16">
-          <main className="min-h-[calc(100vh-4rem)] p-4 md:p-6">
+          <main className="min-h-[calc(100vh-4rem)] min-w-0 overflow-x-hidden p-4 md:p-6">
             <BusinessForbidden permission={requiredPermission} />
           </main>
         </div>
@@ -97,11 +97,13 @@ function BusinessDashboardContent({ children }: { children: ReactNode }) {
 
       <div
         className={cn(
-          'pt-16 transition-[padding] duration-200',
+          'min-w-0 pt-16 transition-[padding] duration-200',
           sidebarCollapsed ? 'md:pl-[4.5rem]' : 'md:pl-64'
         )}
       >
-        <main className="min-h-[calc(100vh-4rem)] p-4 md:p-6">{children}</main>
+        <main className="min-h-[calc(100vh-4rem)] min-w-0 overflow-x-hidden p-4 md:p-6">
+          {children}
+        </main>
       </div>
     </div>
   );
