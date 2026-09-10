@@ -7,6 +7,7 @@ import type { BusinessTransactionPreview } from '@/types/business';
 import { getDiscoDisplayName } from '@/constants/discoNames';
 import { getTransactionIcon } from '@/utils/transactionIcons';
 import { formatPrice } from '@/utils/formatPrice';
+import { formatBusinessBranchLabel } from '@/utils/businessBranchLabel';
 import { StatusBadge } from '@/components/business/StatusBadge';
 import { BusinessTransactionDetailModal } from '@/components/business/BusinessTransactionDetailModal';
 import { cn } from '@/lib/utils';
@@ -120,7 +121,7 @@ export function BusinessTransactionList({
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium text-gray-900">{serviceLabel(tx)}</p>
                 <p className="truncate text-xs text-gray-500">
-                  {tx.branchName} · {tx.userName}
+                  {formatBusinessBranchLabel(tx.branchName)} · {tx.userName}
                 </p>
               </div>
               <div className="shrink-0 text-right">

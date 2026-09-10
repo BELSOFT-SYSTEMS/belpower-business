@@ -19,6 +19,7 @@ import {
 import { BusinessApiError, businessWalletApi } from '@/lib/businessApi';
 import type { BranchWalletOverview, BusinessTransactionPreview } from '@/types/business';
 import { formatPrice } from '@/utils/formatPrice';
+import { formatBusinessBranchLabel } from '@/utils/businessBranchLabel';
 
 type LiveScope = BranchWalletOverview & { isFrozen?: boolean };
 
@@ -166,7 +167,7 @@ export default function WalletPage() {
           ? tx.status
           : 'pending',
       entryType: tx.entryType,
-      branchName: tx.branchName || '—',
+      branchName: formatBusinessBranchLabel(tx.branchName),
       userName: tx.userName || '—',
       createdAt: tx.createdAt || new Date().toISOString(),
     }));

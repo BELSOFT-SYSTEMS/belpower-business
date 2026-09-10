@@ -12,6 +12,7 @@ import { getMockDashboardForRole, getWalletBalanceDisplayForRole } from '@/data/
 import { canViewCompanyWallet } from '@/constants/businessRoles';
 import { formatPrice } from '@/utils/formatPrice';
 import { formatAdminRoleLabel } from '@/utils/businessRoleDisplay';
+import { formatBusinessBranchLabel } from '@/utils/businessBranchLabel';
 import type {
   BranchMeter,
   BusinessRole,
@@ -99,7 +100,7 @@ function mapTransactions(
         ? tx.status
         : 'pending',
     entryType: tx.entryType,
-    branchName: tx.branchName || '—',
+    branchName: formatBusinessBranchLabel(tx.branchName),
     userName: tx.userName || '—',
     createdAt: tx.createdAt || new Date().toISOString(),
   }));

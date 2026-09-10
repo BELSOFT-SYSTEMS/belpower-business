@@ -29,6 +29,7 @@ import { getTransactionIcon } from '@/utils/transactionIcons';
 import { downloadBusinessReceipt } from '@/utils/downloadBusinessReceipt';
 import { getBusinessBuyAgainLabel, getBusinessBuyAgainPath } from '@/utils/transactionActions';
 import { formatPrice } from '@/utils/formatPrice';
+import { formatBusinessBranchLabel } from '@/utils/businessBranchLabel';
 import { StatusBadge } from '@/components/business/StatusBadge';
 import { cn } from '@/lib/utils';
 
@@ -166,7 +167,7 @@ function mapApiTransactionToDetail(
     fullName: row.userName || '—',
     email: '',
     phoneNumber: '',
-    branchName: row.branchName || '—',
+    branchName: formatBusinessBranchLabel(row.branchName),
     userName: row.userName || '—',
     entryType: row.entryType,
     metadata,

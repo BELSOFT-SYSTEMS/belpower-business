@@ -8,6 +8,7 @@ import { getMockTransactionsForRole } from '@/data/businessMocks';
 import { BusinessApiError, businessTransactionsApi } from '@/lib/businessApi';
 import type { BusinessTransactionPreview } from '@/types/business';
 import { toast } from 'sonner';
+import { formatBusinessBranchLabel } from '@/utils/businessBranchLabel';
 
 const STATUS_FILTERS = ['all', 'completed', 'pending', 'failed'] as const;
 
@@ -36,7 +37,7 @@ function mapLiveTransactions(
         ? tx.status
         : 'pending',
     entryType: tx.entryType,
-    branchName: tx.branchName || '—',
+    branchName: formatBusinessBranchLabel(tx.branchName),
     userName: tx.userName || '—',
     createdAt: tx.createdAt || new Date().toISOString(),
   }));
