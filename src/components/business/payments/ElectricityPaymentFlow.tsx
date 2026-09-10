@@ -5,20 +5,23 @@ import { useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { PageHeader } from '@/components/business/PageHeader';
 import { ElectricityDiscoSelector } from '@/components/business/payments/ElectricityDiscoSelector';
+import { useBusinessAuth } from '@/context/BusinessAuthContext';
 import {
   ELECTRICITY_DISCOS,
   ELECTRICITY_MAX,
   ELECTRICITY_MIN,
-  createPaymentReference,
-  createVendToken,
   getPaymentBlockReason,
   getProviderName,
-  mockCompletePayment,
-  mockLookupMeter,
+  isValidNigerianPhone,
   resolveDiscoCode,
   type MeterLookup,
   type MeterType,
 } from '@/data/mockPaymentCatalog';
+import {
+  businessPaymentsApi,
+  normalizeBusinessPhone,
+  paymentErrorMessage,
+} from '@/lib/businessPaymentsApi';
 import { formatPrice } from '@/utils/formatPrice';
 import { cn } from '@/lib/utils';
 import {
@@ -29,36 +32,97 @@ import {
   PaymentSuccessView,
   ReviewList,
   SavedBeneficiaryPicker,
-  demoNote,
   fieldClass,
   usePaymentSession,
 } from '@/components/business/payments/paymentShared';
 
-type View = 'form' | 'success' | 'failed';
+type View = 'form' | 'success' | 'failed' | 'pending';
 
 const METER_VERIFY_DEBOUNCE_MS = 600;
 const METER_VERIFY_MIN_DIGITS = 10;
 
+function pickString(...values: unknown[]): string {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) return value.trim();
+    if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  }
+  return '';
+}
+
+function pickOutstanding(raw: Record<string, unknown>): number | null {
+  const candidates = [
+    raw.outstandingDebt,
+    raw.outstanding,
+    raw.Outstanding,
+    raw.debt,
+    raw.amountDue,
+  ];
+  for (const value of candidates) {
+    const n = typeof value === 'number' ? value : Number(String(value ?? '').replace(/,/g, ''));
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+  return null;
+}
+
+function mapMeterLookup(
+  raw: Record<string, unknown>,
+  disco: string,
+  meterType: MeterType,
+): MeterLookup {
+  const customerName =
+    pickString(
+      raw.name,
+      raw.customer_name,
+      raw.customerName,
+      raw.CustomerName,
+      raw.customer,
+    ) || 'Customer';
+  const address =
+    pickString(raw.address, raw.CustomerAddress, raw.customerAddress, raw.Address) || '—';
+  return {
+    customerName,
+    address,
+    disco,
+    meterType,
+    outstanding: pickOutstanding(raw),
+  };
+}
+
 export function ElectricityPaymentFlow() {
   const params = useSearchParams();
   const session = usePaymentSession();
+  const { business } = useBusinessAuth();
   const initialType = params.get('type') === 'postpaid' ? 'postpaid' : 'prepaid';
+  const defaultPhone = business?.phone ? normalizeBusinessPhone(business.phone) : '';
   const [view, setView] = useState<View>('form');
   const [disco, setDisco] = useState(resolveDiscoCode(params.get('disco') || 'ABUJA'));
   const [meterType, setMeterType] = useState<MeterType>(initialType);
   const [meterNumber, setMeterNumber] = useState(params.get('meterNumber') ?? '');
+  const [phone, setPhone] = useState(defaultPhone);
   const [amountInput, setAmountInput] = useState(params.get('amount') ?? '');
   const [lookup, setLookup] = useState<MeterLookup | null>(null);
   const [lookingUp, setLookingUp] = useState(false);
   const [verifyError, setVerifyError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
-  const [result, setResult] = useState<{ reference: string; token: string | null } | null>(null);
+  const [result, setResult] = useState<{
+    reference: string;
+    status: string;
+    token: string | null;
+  } | null>(null);
   const verifyRequestRef = useRef(0);
+
+  useEffect(() => {
+    if (!phone && business?.phone) {
+      setPhone(normalizeBusinessPhone(business.phone));
+    }
+  }, [business?.phone, phone]);
 
   const amount = useMemo(() => {
     if (meterType === 'postpaid' && lookup?.outstanding) return lookup.outstanding;
     return Number(amountInput.replace(/,/g, '').trim()) || 0;
   }, [amountInput, lookup, meterType]);
+
+  const phoneOk = isValidNigerianPhone(phone);
 
   const blockReason = getPaymentBlockReason({
     amount,
@@ -98,8 +162,13 @@ export function ElectricityPaymentFlow() {
 
     const timer = window.setTimeout(async () => {
       try {
-        const next = await mockLookupMeter(digits, disco, meterType);
+        const raw = await businessPaymentsApi.verifyMeter({
+          meter: digits,
+          disco,
+          vendType: meterType.toUpperCase(),
+        });
         if (requestId !== verifyRequestRef.current) return;
+        const next = mapMeterLookup(raw, disco, meterType);
         setLookup(next);
         setVerifyError(null);
         if (next.meterType === 'postpaid' && next.outstanding) {
@@ -108,7 +177,7 @@ export function ElectricityPaymentFlow() {
       } catch (error) {
         if (requestId !== verifyRequestRef.current) return;
         setLookup(null);
-        setVerifyError(error instanceof Error ? error.message : 'Could not verify meter');
+        setVerifyError(paymentErrorMessage(error, 'Could not verify meter'));
       } finally {
         if (requestId === verifyRequestRef.current) {
           setLookingUp(false);
@@ -136,6 +205,10 @@ export function ElectricityPaymentFlow() {
       toast.error('Verify the meter before paying');
       return;
     }
+    if (!phoneOk) {
+      toast.error('Enter a valid Nigerian phone number for the receipt');
+      return;
+    }
     if (amount < ELECTRICITY_MIN || amount > ELECTRICITY_MAX) {
       toast.error(`Amount must be between ${formatPrice(ELECTRICITY_MIN)} and ${formatPrice(ELECTRICITY_MAX)}`);
       return;
@@ -147,16 +220,34 @@ export function ElectricityPaymentFlow() {
 
     setPending(true);
     try {
-      await mockCompletePayment();
-      setResult({
-        reference: createPaymentReference('ELC'),
-        token: meterType === 'prepaid' ? createVendToken() : null,
+      const data = await businessPaymentsApi.buyElectricity({
+        meter: meterNumber.replace(/\D/g, ''),
+        disco,
+        vendType: meterType === 'postpaid' ? 'POSTPAID' : 'PREPAID',
+        amount,
+        phone: normalizeBusinessPhone(phone),
+        branchId: session.spendBranchId,
+        walletId: session.spendWalletId,
       });
-      setView('success');
-      toast.success('Electricity payment completed (demo)');
-    } catch {
+      const token =
+        meterType === 'prepaid' && data.token != null && String(data.token).trim()
+          ? String(data.token)
+          : null;
+      setResult({
+        reference: data.reference,
+        status: data.status,
+        token,
+      });
+      setView(data.pending || data.status === 'pending' ? 'pending' : 'success');
+      toast.success(
+        data.pending || data.status === 'pending'
+          ? 'Electricity payment is processing'
+          : 'Electricity payment completed',
+      );
+      await session.refreshWallet?.();
+    } catch (error) {
       setView('failed');
-      toast.error('Electricity payment could not be completed');
+      toast.error(paymentErrorMessage(error, 'Electricity payment could not be completed'));
     } finally {
       setPending(false);
     }
@@ -172,7 +263,7 @@ export function ElectricityPaymentFlow() {
       {view === 'success' && result ? (
         <PaymentSuccessView
           title="Electricity paid"
-          description={`${formatPrice(amount)} has been paid to ${getProviderName('electricity', disco)} (demo).`}
+          description={`${formatPrice(amount)} has been paid to ${getProviderName('electricity', disco)}.`}
           reference={result.reference}
           rows={[
             { label: 'Disco', value: getProviderName('electricity', disco) },
@@ -182,6 +273,21 @@ export function ElectricityPaymentFlow() {
             { label: 'Amount', value: formatPrice(amount) },
             ...(result.token ? [{ label: 'Token', value: result.token }] : []),
             { label: 'Branch', value: session.selectedBranch?.branchName ?? '—' },
+          ]}
+          onAgain={reset}
+          againLabel="Pay another meter"
+        />
+      ) : view === 'pending' && result ? (
+        <PaymentSuccessView
+          title="Electricity processing"
+          description="Your payment is being confirmed with the disco. The wallet debit will be refunded automatically if it fails."
+          reference={result.reference}
+          rows={[
+            { label: 'Disco', value: getProviderName('electricity', disco) },
+            { label: 'Meter', value: meterNumber },
+            { label: 'Customer', value: lookup?.customerName ?? '—' },
+            { label: 'Amount', value: formatPrice(amount) },
+            { label: 'Status', value: 'Pending confirmation' },
           ]}
           onAgain={reset}
           againLabel="Pay another meter"
@@ -298,6 +404,21 @@ export function ElectricityPaymentFlow() {
             ) : null}
 
             <div>
+              <FieldLabel htmlFor="electricity-phone">Contact phone</FieldLabel>
+              <input
+                id="electricity-phone"
+                inputMode="tel"
+                value={phone}
+                onChange={(event) => setPhone(event.target.value)}
+                placeholder="0803 123 4567"
+                className={fieldClass}
+              />
+              <p className="mt-1.5 text-xs text-gray-500">
+                Used for the disco receipt. Defaults to your business phone when available.
+              </p>
+            </div>
+
+            <div>
               <FieldLabel htmlFor="electricity-amount">
                 {meterType === 'postpaid' ? 'Amount due (NGN)' : 'Amount (NGN)'}
               </FieldLabel>
@@ -324,6 +445,7 @@ export function ElectricityPaymentFlow() {
                 { label: 'Disco', value: getProviderName('electricity', disco) },
                 { label: 'Meter', value: meterNumber || '—' },
                 { label: 'Customer', value: lookup?.customerName ?? 'Not verified' },
+                { label: 'Phone', value: phoneOk ? normalizeBusinessPhone(phone) : '—' },
                 { label: 'Debit', value: amount ? formatPrice(amount) : '—' },
               ]}
             />
@@ -331,12 +453,16 @@ export function ElectricityPaymentFlow() {
             <PayButton
               pending={pending}
               disabled={
-                !lookup || lookingUp || amount < ELECTRICITY_MIN || amount > ELECTRICITY_MAX || Boolean(blockReason)
+                !lookup ||
+                lookingUp ||
+                !phoneOk ||
+                amount < ELECTRICITY_MIN ||
+                amount > ELECTRICITY_MAX ||
+                Boolean(blockReason)
               }
               label={`Pay ${amount ? formatPrice(amount) : 'electricity'}`}
             />
           </form>
-          {demoNote()}
         </>
       )}
     </div>

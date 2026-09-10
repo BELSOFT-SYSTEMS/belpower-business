@@ -10,6 +10,7 @@ import {
   ChevronRight,
   CreditCard,
   LayoutDashboard,
+  Lock,
   Receipt,
   Settings,
   Users,
@@ -160,21 +161,36 @@ export function BusinessSidebar({ onNavigate }: { onNavigate?: () => void }) {
                   {item.children && expanded && (
                     <ul className="business_sidebar_children ml-3 mt-1 space-y-0.5 border-l border-gray-200 pl-3">
                       {item.children
-                        .filter((child) => !child.permission || canAccess(child.permission))
+                        .filter((child) => {
+                          if (child.locked) {
+                            return !item.permission || canAccess(item.permission);
+                          }
+                          return !child.permission || canAccess(child.permission);
+                        })
                         .map((child) => (
                           <li key={child.href}>
-                            <Link
-                              href={child.href}
-                              onClick={onNavigate}
-                              className={cn(
-                                'block rounded-md px-2 py-1.5 text-xs',
-                                isPathMatch(pathname, child.href)
-                                  ? 'font-semibold text-blue-normal'
-                                  : 'text-gray-600 hover:text-gray-900'
-                              )}
-                            >
-                              {child.name}
-                            </Link>
+                            {child.locked ? (
+                              <span
+                                title="Coming soon"
+                                className="flex cursor-not-allowed items-center justify-between gap-2 rounded-md px-2 py-1.5 text-xs text-gray-400"
+                              >
+                                <span>{child.name}</span>
+                                <Lock className="h-3 w-3 shrink-0" aria-hidden />
+                              </span>
+                            ) : (
+                              <Link
+                                href={child.href}
+                                onClick={onNavigate}
+                                className={cn(
+                                  'block rounded-md px-2 py-1.5 text-xs',
+                                  isPathMatch(pathname, child.href)
+                                    ? 'font-semibold text-blue-normal'
+                                    : 'text-gray-600 hover:text-gray-900'
+                                )}
+                              >
+                                {child.name}
+                              </Link>
+                            )}
                           </li>
                         ))}
                     </ul>

@@ -1,19 +1,11 @@
 'use client';
 
 import Image from 'next/image';
-import Link from 'next/link';
-import { ChevronDown, MoreVertical, Trash2, Users } from 'lucide-react';
+import { ChevronDown, Lock, MoreVertical, Trash2, Users } from 'lucide-react';
 import { secondaryButtonClass } from '@/components/business/payments/paymentShared';
 import { getProviderLogo, getProviderName } from '@/data/mockPaymentCatalog';
 import type { BeneficiaryGroup } from '@/types/business';
 import { cn } from '@/lib/utils';
-
-export function beneficiaryGroupBulkPath(
-  group: BeneficiaryGroup,
-  payService: 'airtime' | 'data',
-): string {
-  return `/business/payments/bulk?groupId=${encodeURIComponent(group.id)}&service=${payService}`;
-}
 
 export function BeneficiaryGroupCard({
   group,
@@ -120,18 +112,24 @@ export function BeneficiaryGroupCard({
             </button>
             {canBulk ? (
               <>
-                <Link
-                  href={beneficiaryGroupBulkPath(group, 'airtime')}
-                  className={`${secondaryButtonClass} !px-3 !py-2`}
+                <button
+                  type="button"
+                  disabled
+                  title="Coming soon"
+                  className={`${secondaryButtonClass} !px-3 !py-2 cursor-not-allowed opacity-60`}
                 >
+                  <Lock className="h-3.5 w-3.5" aria-hidden />
                   Bulk airtime
-                </Link>
-                <Link
-                  href={beneficiaryGroupBulkPath(group, 'data')}
-                  className={`${secondaryButtonClass} !px-3 !py-2`}
+                </button>
+                <button
+                  type="button"
+                  disabled
+                  title="Coming soon"
+                  className={`${secondaryButtonClass} !px-3 !py-2 cursor-not-allowed opacity-60`}
                 >
+                  <Lock className="h-3.5 w-3.5" aria-hidden />
                   Bulk data
-                </Link>
+                </button>
               </>
             ) : null}
           </div>

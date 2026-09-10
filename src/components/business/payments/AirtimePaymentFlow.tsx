@@ -9,14 +9,18 @@ import {
   AIRTIME_MIN,
   AIRTIME_NETWORKS,
   AIRTIME_PRESETS,
-  createPaymentReference,
   detectNetworkFromPhone,
   getPaymentBlockReason,
   getProviderName,
   isValidNigerianPhone,
-  mockCompletePayment,
   normalizePhone,
 } from '@/data/mockPaymentCatalog';
+import {
+  businessPaymentsApi,
+  networkToDisco,
+  normalizeBusinessPhone,
+  paymentErrorMessage,
+} from '@/lib/businessPaymentsApi';
 import { formatPrice } from '@/utils/formatPrice';
 import { cn } from '@/lib/utils';
 import {
@@ -28,12 +32,11 @@ import {
   ProviderTiles,
   SavedBeneficiaryPicker,
   ReviewList,
-  demoNote,
   fieldClass,
   usePaymentSession,
 } from '@/components/business/payments/paymentShared';
 
-type View = 'form' | 'success' | 'failed';
+type View = 'form' | 'success' | 'failed' | 'pending';
 
 export function AirtimePaymentFlow() {
   const params = useSearchParams();
@@ -43,7 +46,7 @@ export function AirtimePaymentFlow() {
   const [phone, setPhone] = useState(params.get('phoneNumber') ?? '');
   const [amountInput, setAmountInput] = useState(params.get('amount') ?? '');
   const [pending, setPending] = useState(false);
-  const [result, setResult] = useState<{ reference: string } | null>(null);
+  const [result, setResult] = useState<{ reference: string; status: string } | null>(null);
 
   const amount = useMemo(() => Number(amountInput.replace(/,/g, '').trim()) || 0, [amountInput]);
   const phoneOk = isValidNigerianPhone(phone);
@@ -81,14 +84,24 @@ export function AirtimePaymentFlow() {
 
     setPending(true);
     try {
-      await mockCompletePayment();
-      const reference = createPaymentReference('AIR');
-      setResult({ reference });
-      setView('success');
-      toast.success('Airtime sent (demo)');
-    } catch {
+      const data = await businessPaymentsApi.buyAirtime({
+        phone: normalizeBusinessPhone(phone),
+        amount,
+        disco: networkToDisco(network),
+        branchId: session.spendBranchId,
+        walletId: session.spendWalletId,
+      });
+      setResult({ reference: data.reference, status: data.status });
+      setView(data.pending || data.status === 'pending' ? 'pending' : 'success');
+      toast.success(
+        data.pending || data.status === 'pending'
+          ? 'Airtime purchase is processing'
+          : 'Airtime sent successfully',
+      );
+      await session.refreshWallet?.();
+    } catch (error) {
       setView('failed');
-      toast.error('Airtime payment could not be completed');
+      toast.error(paymentErrorMessage(error, 'Airtime payment could not be completed'));
     } finally {
       setPending(false);
     }
@@ -104,13 +117,27 @@ export function AirtimePaymentFlow() {
       {view === 'success' && result ? (
         <PaymentSuccessView
           title="Airtime sent"
-          description={`${formatPrice(amount)} ${getProviderName('airtime', network)} airtime has been sent to ${normalizePhone(phone)} (demo).`}
+          description={`${formatPrice(amount)} ${getProviderName('airtime', network)} airtime has been sent to ${normalizePhone(phone)}.`}
           reference={result.reference}
           rows={[
             { label: 'Network', value: getProviderName('airtime', network) },
             { label: 'Phone', value: normalizePhone(phone) },
             { label: 'Amount', value: formatPrice(amount) },
             { label: 'Branch', value: session.selectedBranch?.branchName ?? '—' },
+          ]}
+          onAgain={reset}
+          againLabel="Buy airtime again"
+        />
+      ) : view === 'pending' && result ? (
+        <PaymentSuccessView
+          title="Airtime processing"
+          description="Your purchase is being confirmed with the provider. The wallet debit will be refunded automatically if it fails."
+          reference={result.reference}
+          rows={[
+            { label: 'Network', value: getProviderName('airtime', network) },
+            { label: 'Phone', value: normalizePhone(phone) },
+            { label: 'Amount', value: formatPrice(amount) },
+            { label: 'Status', value: 'Pending confirmation' },
           ]}
           onAgain={reset}
           againLabel="Buy airtime again"
@@ -201,12 +228,9 @@ export function AirtimePaymentFlow() {
                   </button>
                 ))}
               </div>
-              <p className="mt-2 text-xs text-gray-500">
-                Minimum {formatPrice(AIRTIME_MIN)} · Maximum {formatPrice(AIRTIME_MAX)}
-              </p>
               {amountInvalid ? (
-                <p className="mt-2 text-xs text-red-600">
-                  Enter between {formatPrice(AIRTIME_MIN)} and {formatPrice(AIRTIME_MAX)}.
+                <p className="mt-1.5 text-xs text-red-600">
+                  Amount must be between {formatPrice(AIRTIME_MIN)} and {formatPrice(AIRTIME_MAX)}.
                 </p>
               ) : null}
             </div>
@@ -214,18 +238,18 @@ export function AirtimePaymentFlow() {
             <ReviewList
               rows={[
                 { label: 'Network', value: getProviderName('airtime', network) },
-                { label: 'Phone', value: phone ? normalizePhone(phone) : '—' },
-                { label: 'Debit', value: amount ? formatPrice(amount) : '—' },
+                { label: 'Phone', value: phoneOk ? normalizePhone(phone) : '—' },
+                { label: 'Amount', value: amount ? formatPrice(amount) : '—' },
+                { label: 'Debit from', value: session.wallet.label },
               ]}
             />
 
             <PayButton
               pending={pending}
-              disabled={!phoneOk || amount < AIRTIME_MIN || amount > AIRTIME_MAX || Boolean(blockReason)}
-              label={`Pay ${amount ? formatPrice(amount) : 'airtime'}`}
+              disabled={!phoneOk || amountInvalid || Boolean(blockReason) || amount <= 0}
+              label={`Pay ${amount ? formatPrice(amount) : ''}`}
             />
           </form>
-          {demoNote()}
         </>
       )}
     </div>

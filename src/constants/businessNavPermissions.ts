@@ -9,7 +9,7 @@ export type BusinessNavItem = {
   name: string;
   href: string;
   permission?: string;
-  children?: { name: string; href: string; permission?: string }[];
+  children?: { name: string; href: string; permission?: string; locked?: boolean }[];
 };
 
 export const BUSINESS_NAV_ITEMS: BusinessNavItem[] = [
@@ -34,7 +34,7 @@ export const BUSINESS_NAV_ITEMS: BusinessNavItem[] = [
       { name: 'Data', href: '/business/payments/data', permission: 'payments.single' },
       { name: 'Electricity', href: '/business/payments/electricity', permission: 'payments.single' },
       { name: 'Cable TV', href: '/business/payments/cable', permission: 'payments.single' },
-      { name: 'Bulk Payments', href: '/business/payments/bulk', permission: 'payments.bulk' },
+      { name: 'Bulk Payments', href: '/business/payments/bulk', permission: 'payments.bulk', locked: true },
     ],
   },
   { name: 'Branches', href: '/business/branches', permission: 'branches.view' },
@@ -220,7 +220,7 @@ export function getRequiredPermissionForRoute(pathname: string): string | null {
 
   if (exact[normalized]) return exact[normalized];
 
-  if (normalized.startsWith('/business/payments/bulk')) return 'payments.bulk';
+  if (normalized.startsWith('/business/payments/bulk')) return 'payments.single';
   if (normalized.startsWith('/business/payments/')) return 'payments.single';
 
   return 'business.view';

@@ -6,15 +6,18 @@ import { toast } from 'sonner';
 import { PageHeader } from '@/components/business/PageHeader';
 import {
   AIRTIME_NETWORKS,
-  createPaymentReference,
-  findDataPlan,
-  getDataPlansForNetwork,
   getPaymentBlockReason,
   getProviderName,
   isValidNigerianPhone,
-  mockCompletePayment,
   normalizePhone,
 } from '@/data/mockPaymentCatalog';
+import {
+  businessPaymentsApi,
+  networkToDisco,
+  normalizeBusinessPhone,
+  paymentErrorMessage,
+  type BusinessDataPlan,
+} from '@/lib/businessPaymentsApi';
 import { formatPrice } from '@/utils/formatPrice';
 import { cn } from '@/lib/utils';
 import {
@@ -27,13 +30,34 @@ import {
   ProviderTiles,
   ReviewList,
   SavedBeneficiaryPicker,
-  demoNote,
   fieldClass,
   usePagedItems,
   usePaymentSession,
 } from '@/components/business/payments/paymentShared';
 
-type View = 'form' | 'success' | 'failed';
+type View = 'form' | 'success' | 'failed' | 'pending';
+
+type NormalizedDataPlan = {
+  key: string;
+  name: string;
+  validity: string;
+  amount: number;
+  tariffClass: string;
+};
+
+function normalizeDataPlan(plan: BusinessDataPlan): NormalizedDataPlan | null {
+  const tariffClass = String(plan.tariffClass || plan.code || plan.id || '').trim();
+  if (!tariffClass) return null;
+  const amount = Number(plan.amount ?? plan.price ?? 0);
+  if (!amount || amount <= 0) return null;
+  return {
+    key: tariffClass,
+    name: String(plan.name || plan.description || tariffClass),
+    validity: String(plan.validity || ''),
+    amount,
+    tariffClass,
+  };
+}
 
 export function DataPaymentFlow() {
   const params = useSearchParams();
@@ -42,17 +66,13 @@ export function DataPaymentFlow() {
   const [view, setView] = useState<View>('form');
   const [network, setNetwork] = useState(initialNetwork);
   const [phone, setPhone] = useState(params.get('phoneNumber') ?? '');
-  const [planId, setPlanId] = useState(
-    () =>
-      findDataPlan(params.get('dataPlan') ?? '', initialNetwork)?.id ??
-      getDataPlansForNetwork(initialNetwork)[0]?.id ??
-      '',
-  );
+  const [planKey, setPlanKey] = useState(params.get('dataPlan') ?? '');
+  const [plans, setPlans] = useState<NormalizedDataPlan[]>([]);
+  const [plansLoading, setPlansLoading] = useState(false);
   const [pending, setPending] = useState(false);
-  const [result, setResult] = useState<{ reference: string } | null>(null);
+  const [result, setResult] = useState<{ reference: string; status: string } | null>(null);
 
-  const plans = getDataPlansForNetwork(network);
-  const selectedPlan = plans.find((plan) => plan.id === planId) ?? null;
+  const selectedPlan = plans.find((plan) => plan.key === planKey) ?? null;
   const amount = selectedPlan?.amount ?? 0;
   const phoneOk = isValidNigerianPhone(phone);
   const {
@@ -62,13 +82,41 @@ export function DataPaymentFlow() {
     setPage: setPlanPage,
   } = usePagedItems(plans, network);
 
+  const preferredPlan = params.get('dataPlan') ?? '';
+
   useEffect(() => {
-    setPlanId((current) => {
-      const nextPlans = getDataPlansForNetwork(network);
-      if (current && nextPlans.some((plan) => plan.id === current)) return current;
-      return nextPlans[0]?.id ?? '';
-    });
-  }, [network]);
+    let cancelled = false;
+    setPlansLoading(true);
+    setPlans([]);
+    setPlanKey('');
+
+    (async () => {
+      try {
+        const raw = await businessPaymentsApi.dataPlans(network);
+        if (cancelled) return;
+        const next = raw
+          .map(normalizeDataPlan)
+          .filter((plan): plan is NormalizedDataPlan => Boolean(plan));
+        setPlans(next);
+        const match =
+          (preferredPlan &&
+            next.find((plan) => plan.key === preferredPlan || plan.name === preferredPlan)) ||
+          next[0];
+        setPlanKey(match?.key ?? '');
+      } catch (error) {
+        if (cancelled) return;
+        setPlans([]);
+        setPlanKey('');
+        toast.error(paymentErrorMessage(error, 'Could not load data plans'));
+      } finally {
+        if (!cancelled) setPlansLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [network, preferredPlan]);
 
   const blockReason = getPaymentBlockReason({
     amount,
@@ -82,7 +130,12 @@ export function DataPaymentFlow() {
     () => [
       { label: 'Network', value: getProviderName('data', network) },
       { label: 'Phone', value: phone ? normalizePhone(phone) : '—' },
-      { label: 'Plan', value: selectedPlan ? `${selectedPlan.name} · ${selectedPlan.validity}` : '—' },
+      {
+        label: 'Plan',
+        value: selectedPlan
+          ? `${selectedPlan.name}${selectedPlan.validity ? ` · ${selectedPlan.validity}` : ''}`
+          : '—',
+      },
       { label: 'Debit', value: amount ? formatPrice(amount) : '—' },
     ],
     [amount, network, phone, selectedPlan],
@@ -111,13 +164,25 @@ export function DataPaymentFlow() {
 
     setPending(true);
     try {
-      await mockCompletePayment();
-      setResult({ reference: createPaymentReference('DAT') });
-      setView('success');
-      toast.success('Data bundle sent (demo)');
-    } catch {
+      const data = await businessPaymentsApi.buyData({
+        phone: normalizeBusinessPhone(phone),
+        amount: selectedPlan.amount,
+        disco: networkToDisco(network),
+        tariffClass: selectedPlan.tariffClass,
+        branchId: session.spendBranchId,
+        walletId: session.spendWalletId,
+      });
+      setResult({ reference: data.reference, status: data.status });
+      setView(data.pending || data.status === 'pending' ? 'pending' : 'success');
+      toast.success(
+        data.pending || data.status === 'pending'
+          ? 'Data purchase is processing'
+          : 'Data bundle sent successfully',
+      );
+      await session.refreshWallet?.();
+    } catch (error) {
       setView('failed');
-      toast.error('Data payment could not be completed');
+      toast.error(paymentErrorMessage(error, 'Data payment could not be completed'));
     } finally {
       setPending(false);
     }
@@ -133,9 +198,22 @@ export function DataPaymentFlow() {
       {view === 'success' && result && selectedPlan ? (
         <PaymentSuccessView
           title="Data sent"
-          description={`${selectedPlan.name} (${selectedPlan.validity}) has been sent to ${normalizePhone(phone)} (demo).`}
+          description={`${selectedPlan.name}${selectedPlan.validity ? ` (${selectedPlan.validity})` : ''} has been sent to ${normalizePhone(phone)}.`}
           reference={result.reference}
           rows={[...summary, { label: 'Branch', value: session.selectedBranch?.branchName ?? '—' }]}
+          onAgain={reset}
+          againLabel="Buy data again"
+        />
+      ) : view === 'pending' && result && selectedPlan ? (
+        <PaymentSuccessView
+          title="Data processing"
+          description="Your purchase is being confirmed with the provider. The wallet debit will be refunded automatically if it fails."
+          reference={result.reference}
+          rows={[
+            ...summary,
+            { label: 'Status', value: 'Pending confirmation' },
+            { label: 'Branch', value: session.selectedBranch?.branchName ?? '—' },
+          ]}
           onAgain={reset}
           againLabel="Buy data again"
         />
@@ -179,7 +257,6 @@ export function DataPaymentFlow() {
                 value={network}
                 onChange={(next) => {
                   setNetwork(next);
-                  setPlanId('');
                 }}
               />
             </div>
@@ -198,41 +275,49 @@ export function DataPaymentFlow() {
 
             <div>
               <FieldLabel>Data plan</FieldLabel>
-              <div className="mt-1.5 grid gap-2 sm:grid-cols-2">
-                {visiblePlans.map((plan) => {
-                  const selected = plan.id === selectedPlan?.id;
-                  return (
-                    <button
-                      key={plan.id}
-                      type="button"
-                      onClick={() => setPlanId(plan.id)}
-                      className={cn(
-                        'rounded-xl border px-4 py-3 text-left',
-                        selected
-                          ? 'border-blue-normal bg-blue-50 ring-2 ring-blue-normal/20'
-                          : 'border-gray-200 hover:border-gray-300',
-                      )}
-                    >
-                      <p className="text-sm font-semibold text-gray-900">
-                        {plan.name} · {plan.validity}
-                      </p>
-                      <p className="mt-1 text-sm text-gray-600">{formatPrice(plan.amount)}</p>
-                    </button>
-                  );
-                })}
-              </div>
-              <OptionPager page={planPage} pageCount={planPageCount} onPageChange={setPlanPage} />
+              {plansLoading ? (
+                <p className="mt-2 text-sm text-gray-500">Loading plans…</p>
+              ) : plans.length === 0 ? (
+                <p className="mt-2 text-sm text-gray-500">No plans available for this network.</p>
+              ) : (
+                <>
+                  <div className="mt-1.5 grid gap-2 sm:grid-cols-2">
+                    {visiblePlans.map((plan) => {
+                      const selected = plan.key === selectedPlan?.key;
+                      return (
+                        <button
+                          key={plan.key}
+                          type="button"
+                          onClick={() => setPlanKey(plan.key)}
+                          className={cn(
+                            'rounded-xl border px-4 py-3 text-left',
+                            selected
+                              ? 'border-blue-normal bg-blue-50 ring-2 ring-blue-normal/20'
+                              : 'border-gray-200 hover:border-gray-300',
+                          )}
+                        >
+                          <p className="text-sm font-semibold text-gray-900">
+                            {plan.name}
+                            {plan.validity ? ` · ${plan.validity}` : ''}
+                          </p>
+                          <p className="mt-1 text-sm text-gray-600">{formatPrice(plan.amount)}</p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <OptionPager page={planPage} pageCount={planPageCount} onPageChange={setPlanPage} />
+                </>
+              )}
             </div>
 
             <ReviewList rows={summary} />
 
             <PayButton
               pending={pending}
-              disabled={!phoneOk || !selectedPlan || Boolean(blockReason)}
+              disabled={!phoneOk || !selectedPlan || plansLoading || Boolean(blockReason)}
               label={`Pay ${amount ? formatPrice(amount) : 'data'}`}
             />
           </form>
-          {demoNote()}
         </>
       )}
     </div>

@@ -16,10 +16,23 @@ import {
 } from '@/data/businessMocks';
 import type { BusinessBeneficiary } from '@/types/business';
 import { getPaymentBlockReason, type PaymentService as CatalogService } from '@/data/mockPaymentCatalog';
+import { businessWalletApi } from '@/lib/businessApi';
 import { formatPrice } from '@/utils/formatPrice';
 import { cn } from '@/lib/utils';
 
 type Service = CatalogService;
+
+type SessionBranch = {
+  branchId: string;
+  branchName: string;
+  allocatedBalance: number;
+  todaySpend: number;
+  monthSpend: number;
+  monthTransactions: number;
+  walletId?: string;
+  isFrozen?: boolean;
+  dailyLimit?: number;
+};
 
 export const fieldClass =
   'mt-1.5 w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-blue-normal focus:ring-2 focus:ring-blue-normal/20 disabled:bg-gray-50';
@@ -30,15 +43,175 @@ export const primaryButtonClass =
 export const secondaryButtonClass =
   'inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-5 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50';
 
+function mapBeneficiary(raw: Record<string, unknown>): BusinessBeneficiary | null {
+  const id = String(raw.id || '');
+  let service = String(raw.service || raw.type || '');
+  if (service === 'phone') service = 'airtime';
+  if (!id || !['airtime', 'data', 'electricity', 'cable', 'phone'].includes(service)) return null;
+  return {
+    id,
+    label: String(raw.label || raw.name || raw.accountNumber || 'Beneficiary'),
+    service: service as BusinessBeneficiary['service'],
+    provider: String(raw.provider || raw.disco || ''),
+    accountNumber: String(raw.accountNumber || raw.account_number || raw.phone || raw.meter || ''),
+    branchName: String(raw.branchName || raw.branch_name || 'Head Office'),
+    meterType: (raw.meterType as BusinessBeneficiary['meterType']) || undefined,
+    isPrimary: Boolean(raw.isPrimary ?? raw.is_primary),
+    createdAt: String(raw.createdAt || raw.created_at || new Date().toISOString()),
+  };
+}
+
 export function usePaymentSession() {
-  const { user, demoRole } = useBusinessAuth();
+  const { user, demoRole, isAuthenticated, dashboardBootstrap, business } = useBusinessAuth();
   const role = user?.role ?? demoRole;
-  const dashboard = getMockDashboardForRole(role);
-  const defaultWallet = getWalletBalanceDisplayForRole(role);
-  const branches = getMockBranchWalletOverviewForRole(role);
+  const mockDashboard = getMockDashboardForRole(role);
+  const mockWallet = getWalletBalanceDisplayForRole(role);
+  const mockBranches = getMockBranchWalletOverviewForRole(role);
+
+  const [liveBranches, setLiveBranches] = useState<SessionBranch[]>([]);
+  const [liveCompany, setLiveCompany] = useState<{
+    balance: number;
+    todaySpend: number;
+    monthSpend: number;
+    isFrozen: boolean;
+    dailyLimit: number;
+    walletId?: string;
+    branchName?: string;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setLiveBranches([]);
+      setLiveCompany(null);
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const overview = await businessWalletApi.overview();
+        if (cancelled) return;
+
+        const company = overview.companyWallet;
+        const bootstrapWallet = dashboardBootstrap?.wallet;
+        setLiveCompany({
+          balance: company?.availableBalance ?? company?.balance ?? bootstrapWallet?.availableBalance ?? bootstrapWallet?.balance ?? 0,
+          todaySpend: company?.todaySpend ?? bootstrapWallet?.todaySpend ?? 0,
+          monthSpend: company?.monthSpend ?? bootstrapWallet?.monthSpend ?? 0,
+          isFrozen: Boolean(
+            overview.wallets.find((w) => w.scope === 'company')?.isFrozen ??
+              bootstrapWallet?.isFrozen ??
+              bootstrapWallet?.status === 'frozen',
+          ),
+          dailyLimit: Number(bootstrapWallet?.dailyLimit ?? 2_000_000),
+          walletId: company?.id,
+          branchName: bootstrapWallet?.branchName || 'Head Office',
+        });
+
+        setLiveBranches(
+          (overview.allocatableBranches || []).map((branch) => ({
+            branchId: branch.branchId,
+            branchName: branch.branchName,
+            allocatedBalance: branch.allocatedBalance,
+            todaySpend: 0,
+            monthSpend: 0,
+            monthTransactions: 0,
+            walletId: branch.walletId,
+            isFrozen: branch.isFrozen,
+          })),
+        );
+      } catch {
+        if (cancelled) return;
+        const bootstrapWallet = dashboardBootstrap?.wallet;
+        if (bootstrapWallet) {
+          setLiveCompany({
+            balance: bootstrapWallet.availableBalance ?? bootstrapWallet.balance ?? 0,
+            todaySpend: bootstrapWallet.todaySpend ?? 0,
+            monthSpend: bootstrapWallet.monthSpend ?? 0,
+            isFrozen: Boolean(bootstrapWallet.isFrozen || bootstrapWallet.status === 'frozen'),
+            dailyLimit: Number(bootstrapWallet.dailyLimit ?? 2_000_000),
+            walletId: bootstrapWallet.id,
+            branchName: bootstrapWallet.branchName || 'Head Office',
+          });
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated, dashboardBootstrap]);
+
+  const branches: SessionBranch[] = isAuthenticated
+    ? liveBranches
+    : mockBranches.map((branch) => ({
+        branchId: branch.branchId,
+        branchName: branch.branchName,
+        allocatedBalance: branch.allocatedBalance,
+        todaySpend: branch.todaySpend,
+        monthSpend: branch.monthSpend,
+        monthTransactions: branch.monthTransactions,
+      }));
   const canChargeToBranch = isHeadOfficeRole(role) && branches.length > 0;
   const [chargeToBranch, setChargeToBranch] = useState(false);
-  const [branchId, setBranchId] = useState(branches[0]?.branchId ?? '');
+  const [branchId, setBranchId] = useState('');
+
+  useEffect(() => {
+    if (!branchId && branches[0]?.branchId) {
+      setBranchId(branches[0].branchId);
+    }
+  }, [branchId, branches]);
+
+  const defaultWallet = useMemo(() => {
+    if (isAuthenticated && liveCompany) {
+      return {
+        label: liveCompany.branchName ? `${liveCompany.branchName} wallet` : 'Company wallet',
+        balance: liveCompany.balance,
+      };
+    }
+    if (isAuthenticated && dashboardBootstrap?.wallet) {
+      return {
+        label: `${dashboardBootstrap.wallet.branchName || 'Head Office'} wallet`,
+        balance: dashboardBootstrap.wallet.availableBalance ?? dashboardBootstrap.wallet.balance ?? 0,
+      };
+    }
+    return mockWallet;
+  }, [dashboardBootstrap?.wallet, isAuthenticated, liveCompany, mockWallet]);
+
+  const dashboard = useMemo(() => {
+    if (!isAuthenticated) return mockDashboard;
+    const todaySpend = liveCompany?.todaySpend ?? dashboardBootstrap?.wallet?.todaySpend ?? 0;
+    const monthSpend = liveCompany?.monthSpend ?? dashboardBootstrap?.wallet?.monthSpend ?? 0;
+    const isFrozen =
+      liveCompany?.isFrozen ??
+      Boolean(dashboardBootstrap?.wallet?.isFrozen || dashboardBootstrap?.wallet?.status === 'frozen');
+    const dailyLimit =
+      liveCompany?.dailyLimit ?? Number(dashboardBootstrap?.wallet?.dailyLimit ?? 2_000_000);
+    return {
+      ...mockDashboard,
+      business: business
+        ? {
+            ...mockDashboard.business,
+            ...business,
+          }
+        : mockDashboard.business,
+      wallet: {
+        ...mockDashboard.wallet,
+        balance: defaultWallet.balance,
+        todaySpend,
+        monthSpend,
+        isFrozen,
+        dailyLimit,
+      },
+    };
+  }, [
+    business,
+    dashboardBootstrap?.wallet,
+    defaultWallet.balance,
+    isAuthenticated,
+    liveCompany,
+    mockDashboard,
+  ]);
 
   const selectedBranch = useMemo(() => {
     if (canChargeToBranch && !chargeToBranch) {
@@ -49,7 +222,8 @@ export function usePaymentSession() {
         todaySpend: dashboard.wallet.todaySpend,
         monthSpend: dashboard.wallet.monthSpend,
         monthTransactions: 0,
-      };
+        walletId: liveCompany?.walletId,
+      } satisfies SessionBranch;
     }
     return branches.find((branch) => branch.branchId === branchId) ?? branches[0];
   }, [
@@ -60,6 +234,7 @@ export function usePaymentSession() {
     dashboard.wallet.monthSpend,
     dashboard.wallet.todaySpend,
     defaultWallet.balance,
+    liveCompany?.walletId,
   ]);
 
   const wallet = useMemo(() => {
@@ -77,12 +252,27 @@ export function usePaymentSession() {
       ? selectedBranch.todaySpend
       : dashboard.wallet.todaySpend;
 
+  const beneficiaries = useMemo(() => {
+    if (isAuthenticated && dashboardBootstrap?.beneficiaries?.length) {
+      return dashboardBootstrap.beneficiaries
+        .map((item) => mapBeneficiary(item as Record<string, unknown>))
+        .filter((item): item is BusinessBeneficiary => Boolean(item));
+    }
+    if (isAuthenticated) return [];
+    return getMockBeneficiariesForRole(role);
+  }, [dashboardBootstrap?.beneficiaries, isAuthenticated, role]);
+
+  const spendWalletId =
+    canChargeToBranch && chargeToBranch ? selectedBranch?.walletId : liveCompany?.walletId;
+  const spendBranchId =
+    canChargeToBranch && chargeToBranch ? selectedBranch?.branchId || null : null;
+
   return {
     role,
     dashboard,
     wallet,
     branches,
-    beneficiaries: getMockBeneficiariesForRole(role),
+    beneficiaries,
     canChargeToBranch,
     chargeToBranch,
     setChargeToBranch,
@@ -92,6 +282,38 @@ export function usePaymentSession() {
     frozen: dashboard.wallet.isFrozen,
     todaySpend,
     dailyLimit: dashboard.wallet.dailyLimit,
+    spendWalletId: spendWalletId || null,
+    spendBranchId,
+    refreshWallet: async () => {
+      if (!isAuthenticated) return;
+      try {
+        const overview = await businessWalletApi.overview();
+        const company = overview.companyWallet;
+        setLiveCompany((current) => ({
+          balance: company?.availableBalance ?? company?.balance ?? 0,
+          todaySpend: company?.todaySpend ?? current?.todaySpend ?? 0,
+          monthSpend: company?.monthSpend ?? current?.monthSpend ?? 0,
+          isFrozen: Boolean(overview.wallets.find((w) => w.scope === 'company')?.isFrozen),
+          dailyLimit: current?.dailyLimit ?? 2_000_000,
+          walletId: company?.id,
+          branchName: current?.branchName || 'Head Office',
+        }));
+        setLiveBranches(
+          (overview.allocatableBranches || []).map((branch) => ({
+            branchId: branch.branchId,
+            branchName: branch.branchName,
+            allocatedBalance: branch.allocatedBalance,
+            todaySpend: 0,
+            monthSpend: 0,
+            monthTransactions: 0,
+            walletId: branch.walletId,
+            isFrozen: branch.isFrozen,
+          })),
+        );
+      } catch {
+        // keep current balances
+      }
+    },
   };
 }
 
@@ -533,11 +755,7 @@ export function PayButton({
 }
 
 export function demoNote() {
-  return (
-    <p className="text-center text-xs text-gray-500">
-      Demo UI — payments are not sent to a provider until backend integration.
-    </p>
-  );
+  return null;
 }
 
 export function beneficiaryPayPath(
