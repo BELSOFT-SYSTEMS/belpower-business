@@ -86,7 +86,7 @@ export function BusinessAuthProvider({ children }: { children: ReactNode }) {
   const [demoRole, setDemoRoleState] = useState<BusinessRole>('super_admin');
 
   const persistBootstrap = useCallback((payload: BusinessMePayload) => {
-    sessionStorage.setItem(businessAuthStorage.dashboardKey, JSON.stringify(payload));
+    businessAuthStorage.setJson(businessAuthStorage.dashboardKey, JSON.stringify(payload));
     setDashboardBootstrap(payload);
   }, []);
 
@@ -95,9 +95,9 @@ export function BusinessAuthProvider({ children }: { children: ReactNode }) {
       const profile = toUserProfile(session.user);
       const company = toBusinessProfile(session.business);
       businessAuthStorage.setTokens(session.accessToken, session.refreshToken);
-      sessionStorage.setItem(businessAuthStorage.profileKey, JSON.stringify(profile));
-      sessionStorage.setItem(businessAuthStorage.businessKey, JSON.stringify(company));
-      sessionStorage.setItem(ROLE_KEY, profile.role);
+      businessAuthStorage.setJson(businessAuthStorage.profileKey, JSON.stringify(profile));
+      businessAuthStorage.setJson(businessAuthStorage.businessKey, JSON.stringify(company));
+      businessAuthStorage.setJson(ROLE_KEY, profile.role);
       setHasToken(true);
       setUser(profile);
       setBusiness(company);
@@ -119,9 +119,9 @@ export function BusinessAuthProvider({ children }: { children: ReactNode }) {
     const me = await businessAuthApi.me();
     const profile = toUserProfile(me.user);
     const company = toBusinessProfile(me.business);
-    sessionStorage.setItem(businessAuthStorage.profileKey, JSON.stringify(profile));
-    sessionStorage.setItem(businessAuthStorage.businessKey, JSON.stringify(company));
-    sessionStorage.setItem(ROLE_KEY, profile.role);
+    businessAuthStorage.setJson(businessAuthStorage.profileKey, JSON.stringify(profile));
+    businessAuthStorage.setJson(businessAuthStorage.businessKey, JSON.stringify(company));
+    businessAuthStorage.setJson(ROLE_KEY, profile.role);
     setUser(profile);
     setBusiness(company);
     setDemoRoleState(profile.role);
@@ -134,11 +134,12 @@ export function BusinessAuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
+    businessAuthStorage.syncTokensAcrossTabs();
     const token = businessAuthStorage.getAccessToken();
-    const profileRaw = sessionStorage.getItem(businessAuthStorage.profileKey);
-    const businessRaw = sessionStorage.getItem(businessAuthStorage.businessKey);
-    const bootstrapRaw = sessionStorage.getItem(businessAuthStorage.dashboardKey);
-    const role = normalizeStoredRole(sessionStorage.getItem(ROLE_KEY));
+    const profileRaw = businessAuthStorage.getJson(businessAuthStorage.profileKey);
+    const businessRaw = businessAuthStorage.getJson(businessAuthStorage.businessKey);
+    const bootstrapRaw = businessAuthStorage.getJson(businessAuthStorage.dashboardKey);
+    const role = normalizeStoredRole(businessAuthStorage.getJson(ROLE_KEY));
 
     setHasToken(Boolean(token));
 
@@ -168,9 +169,9 @@ export function BusinessAuthProvider({ children }: { children: ReactNode }) {
       const me = await businessAuthApi.me();
       const profile = toUserProfile(me.user);
       const company = toBusinessProfile(me.business);
-      sessionStorage.setItem(businessAuthStorage.profileKey, JSON.stringify(profile));
-      sessionStorage.setItem(businessAuthStorage.businessKey, JSON.stringify(company));
-      sessionStorage.setItem(ROLE_KEY, profile.role);
+      businessAuthStorage.setJson(businessAuthStorage.profileKey, JSON.stringify(profile));
+      businessAuthStorage.setJson(businessAuthStorage.businessKey, JSON.stringify(company));
+      businessAuthStorage.setJson(ROLE_KEY, profile.role);
       setUser(profile);
       setBusiness(company);
       setDemoRoleState(profile.role);
@@ -185,6 +186,7 @@ export function BusinessAuthProvider({ children }: { children: ReactNode }) {
         } catch {
           businessAuthStorage.clear();
           sessionStorage.removeItem(ROLE_KEY);
+          localStorage.removeItem(ROLE_KEY);
           setHasToken(false);
           setUser(null);
           setBusiness(null);
@@ -236,9 +238,9 @@ export function BusinessAuthProvider({ children }: { children: ReactNode }) {
     const dashboard = getMockDashboardForRole(role);
     const profile = dashboard.user;
     businessAuthStorage.setTokens('mock-business-token', null);
-    sessionStorage.setItem(businessAuthStorage.profileKey, JSON.stringify(profile));
-    sessionStorage.setItem(businessAuthStorage.businessKey, JSON.stringify(dashboard.business));
-    sessionStorage.setItem(ROLE_KEY, role);
+    businessAuthStorage.setJson(businessAuthStorage.profileKey, JSON.stringify(profile));
+    businessAuthStorage.setJson(businessAuthStorage.businessKey, JSON.stringify(dashboard.business));
+    businessAuthStorage.setJson(ROLE_KEY, role);
     setHasToken(true);
     setUser(profile);
     setBusiness(dashboard.business);
@@ -256,6 +258,7 @@ export function BusinessAuthProvider({ children }: { children: ReactNode }) {
     }
     businessAuthStorage.clear();
     sessionStorage.removeItem(ROLE_KEY);
+    localStorage.removeItem(ROLE_KEY);
     setHasToken(false);
     setUser(null);
     setBusiness(null);
@@ -264,9 +267,9 @@ export function BusinessAuthProvider({ children }: { children: ReactNode }) {
 
   const setDemoRole = useCallback((role: BusinessRole) => {
     const dashboard = getMockDashboardForRole(role);
-    sessionStorage.setItem(ROLE_KEY, role);
-    sessionStorage.setItem(businessAuthStorage.profileKey, JSON.stringify(dashboard.user));
-    sessionStorage.setItem(businessAuthStorage.businessKey, JSON.stringify(dashboard.business));
+    businessAuthStorage.setJson(ROLE_KEY, role);
+    businessAuthStorage.setJson(businessAuthStorage.profileKey, JSON.stringify(dashboard.user));
+    businessAuthStorage.setJson(businessAuthStorage.businessKey, JSON.stringify(dashboard.business));
     setDemoRoleState(role);
     setUser(dashboard.user);
     setBusiness(dashboard.business);

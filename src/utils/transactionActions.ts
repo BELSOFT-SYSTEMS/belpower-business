@@ -1,10 +1,18 @@
 import type { BusinessTransactionDetail } from '@/types/businessTransactionDetail';
 import { getElectricityAmountPaid } from '@/lib/transaction-display';
+import {
+  isBusinessWalletAllocateTx,
+  isBusinessWalletFundingTx,
+} from '@/utils/transactionTitle';
 
 export function getBusinessBuyAgainPath(transaction: BusinessTransactionDetail): string {
   const service = transaction.service.toLowerCase();
 
-  if (service === 'wallet' || transaction.entryType === 'credit') {
+  if (isBusinessWalletAllocateTx(transaction)) {
+    return '/business/wallet';
+  }
+
+  if (isBusinessWalletFundingTx(transaction) || transaction.entryType === 'credit') {
     return '/business/wallet/fund';
   }
 
@@ -54,7 +62,8 @@ export function getBusinessBuyAgainPath(transaction: BusinessTransactionDetail):
 }
 
 export function getBusinessBuyAgainLabel(transaction: BusinessTransactionDetail): string {
-  if (transaction.service.toLowerCase() === 'wallet' || transaction.entryType === 'credit') {
+  if (isBusinessWalletAllocateTx(transaction)) return 'View wallet';
+  if (isBusinessWalletFundingTx(transaction) || transaction.entryType === 'credit') {
     return 'Fund wallet';
   }
   return 'Buy Again';

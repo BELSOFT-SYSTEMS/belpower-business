@@ -30,7 +30,8 @@ function BusinessDashboardContent({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (isLoading || isPublicRoute) return;
     if (!isAuthenticated) {
-      window.location.href = `/business/sign-in?from=${encodeURIComponent(pathname)}`;
+      const from = `${pathname}${typeof window !== 'undefined' ? window.location.search : ''}`;
+      window.location.href = `/business/sign-in?from=${encodeURIComponent(from)}`;
     }
   }, [isLoading, isAuthenticated, isPublicRoute, pathname]);
 

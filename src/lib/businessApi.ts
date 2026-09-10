@@ -35,7 +35,27 @@ export const businessAuthStorage = {
   },
   setTokens(accessToken: string, refreshToken?: string | null) {
     sessionStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
-    if (refreshToken) sessionStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+    localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
+    if (refreshToken) {
+      sessionStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+      localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+    }
+  },
+  /** Copy session tokens into localStorage so Paystack return tabs stay signed in. */
+  syncTokensAcrossTabs() {
+    if (typeof window === 'undefined') return;
+    const access = sessionStorage.getItem(ACCESS_TOKEN_KEY);
+    const refresh = sessionStorage.getItem(REFRESH_TOKEN_KEY);
+    if (access) localStorage.setItem(ACCESS_TOKEN_KEY, access);
+    if (refresh) localStorage.setItem(REFRESH_TOKEN_KEY, refresh);
+  },
+  getJson(key: string): string | null {
+    if (typeof window === 'undefined') return null;
+    return sessionStorage.getItem(key) || localStorage.getItem(key);
+  },
+  setJson(key: string, value: string) {
+    sessionStorage.setItem(key, value);
+    localStorage.setItem(key, value);
   },
   clear() {
     sessionStorage.removeItem(ACCESS_TOKEN_KEY);
@@ -47,6 +67,7 @@ export const businessAuthStorage = {
     localStorage.removeItem(REFRESH_TOKEN_KEY);
     localStorage.removeItem(PROFILE_KEY);
     localStorage.removeItem(BUSINESS_KEY);
+    localStorage.removeItem(DASHBOARD_KEY);
   },
 };
 

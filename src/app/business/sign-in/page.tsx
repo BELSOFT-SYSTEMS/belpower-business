@@ -19,7 +19,9 @@ export default function BusinessSignInPage() {
 
   useEffect(() => {
     if (!isLoading && isAuthenticated) {
-      router.replace('/business');
+      const params = new URLSearchParams(window.location.search);
+      const from = params.get('from') || '/business';
+      router.replace(from.startsWith('/') ? from : '/business');
     }
   }, [isLoading, isAuthenticated, router]);
 

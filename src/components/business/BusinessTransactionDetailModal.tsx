@@ -7,7 +7,7 @@ import { Copy, Download, RotateCw, Repeat2, X } from 'lucide-react';
 import { toast } from 'sonner';
 import type { BusinessTransactionDetail } from '@/types/businessTransactionDetail';
 import { getMockTransactionDetailById } from '@/data/mockTransactionDetails';
-import { BusinessApiError, businessTransactionsApi } from '@/lib/businessApi';
+import { BusinessApiError, businessTransactionsApi, businessWalletApi } from '@/lib/businessApi';
 import { useBusinessAuth } from '@/context/BusinessAuthContext';
 import { getDiscoDisplayName } from '@/constants/discoNames';
 import {
@@ -24,7 +24,7 @@ import {
   getTransactionCustomerName,
   getTrustedTransactionTotal,
 } from '@/lib/transaction-display';
-import { getTransactionTitle } from '@/utils/transactionTitle';
+import { getTransactionTitle, isBusinessWalletAllocateTx, isBusinessWalletFundingTx } from '@/utils/transactionTitle';
 import { getTransactionIcon } from '@/utils/transactionIcons';
 import { downloadBusinessReceipt } from '@/utils/downloadBusinessReceipt';
 import { getBusinessBuyAgainLabel, getBusinessBuyAgainPath } from '@/utils/transactionActions';
@@ -217,6 +217,12 @@ export function BusinessTransactionDetailModal({
     }
   }, [open, transactionId]);
 
+  const reloadDetail = useCallback(async () => {
+    if (!transactionId || !isAuthenticated) return;
+    const row = await businessTransactionsApi.get(transactionId);
+    setTransaction(mapApiTransactionToDetail(row));
+  }, [isAuthenticated, transactionId]);
+
   const handleBuyAgain = useCallback(() => {
     if (!transaction) return;
     const href = getBusinessBuyAgainPath(transaction);
@@ -229,14 +235,45 @@ export function BusinessTransactionDetailModal({
 
     setIsRequerying(true);
     try {
-      await new Promise((resolve) => window.setTimeout(resolve, 1200));
-      toast.success('Transaction status refreshed (demo)');
-    } catch {
-      toast.error('Could not requery transaction');
+      if (isBusinessWalletFundingTx(transaction)) {
+        const method = getPaymentMethodKey(transaction);
+        if (method === 'buypower-dva' || method === 'dva') {
+          const status = await businessWalletApi.fundingStatus(transaction.id);
+          if (status.status === 'completed') {
+            toast.success('Payment confirmed. Wallet credited.');
+          } else if (status.status === 'expired') {
+            toast.error('Transfer invoice expired');
+          } else if (status.status === 'failed') {
+            toast.error('Payment failed');
+          } else {
+            toast.message('Payment still pending. Transfer the exact amount if you have not yet.');
+          }
+        } else {
+          const result = await businessWalletApi.verifyFund(transaction.reference);
+          if (result.status === 'completed') {
+            toast.success(
+              result.alreadyProcessed
+                ? 'Payment already credited'
+                : 'Payment verified. Wallet credited.',
+            );
+          } else {
+            toast.message('Payment not completed on Paystack yet');
+          }
+        }
+        await reloadDetail();
+        return;
+      }
+
+      toast.message('Requery for utility payments will be available soon');
+      await reloadDetail();
+    } catch (error) {
+      toast.error(
+        error instanceof BusinessApiError ? error.message : 'Could not verify transaction',
+      );
     } finally {
       setIsRequerying(false);
     }
-  }, [isRequerying, transaction]);
+  }, [isRequerying, reloadDetail, transaction]);
 
   const handleDownloadReceipt = useCallback(async () => {
     if (!transaction || downloadingReceipt) return;
@@ -274,7 +311,9 @@ export function BusinessTransactionDetailModal({
   const isCable = service === 'cable';
   const isAirtime = service === 'airtime';
   const isData = service === 'data';
-  const isWallet = service === 'wallet';
+  const isWalletFunding = transaction ? isBusinessWalletFundingTx(transaction) : false;
+  const isAllocate = transaction ? isBusinessWalletAllocateTx(transaction) : false;
+  const isWalletCredit = isWalletFunding || isAllocate;
 
   const paymentMethodKey = transaction ? getPaymentMethodKey(transaction) : '';
   const paymentMethodLabel = getPaymentMethodLabel(paymentMethodKey);
@@ -287,6 +326,11 @@ export function BusinessTransactionDetailModal({
   const electricityToken = transaction && isElectricity ? getElectricityTokenFromTransaction(transaction) : '';
   const electricityUnits = transaction && isElectricity ? getElectricityUnitsFromTransaction(transaction) : '';
   const transactionStatus = transaction ? normalizeStatusBadge(transaction.status) : null;
+  const canRequeryFunding = Boolean(
+    transaction &&
+      transactionStatus === 'pending' &&
+      (isWalletFunding || isElectricity || isCable || isAirtime || isData),
+  );
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
@@ -320,7 +364,7 @@ export function BusinessTransactionDetailModal({
             )}
           </div>
           <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-            {transaction && transactionStatus === 'completed' ? (
+            {transaction && transactionStatus === 'completed' && !isAllocate ? (
               <button
                 type="button"
                 onClick={handleBuyAgain}
@@ -330,7 +374,7 @@ export function BusinessTransactionDetailModal({
                 {getBusinessBuyAgainLabel(transaction)}
               </button>
             ) : null}
-            {transaction && transactionStatus === 'pending' ? (
+            {transaction && canRequeryFunding ? (
               <button
                 type="button"
                 onClick={handleRequery}
@@ -338,7 +382,11 @@ export function BusinessTransactionDetailModal({
                 className="inline-flex items-center gap-1.5 rounded-lg bg-blue-normal px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-normal-hover disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <RotateCw className={cn('h-3.5 w-3.5', isRequerying && 'animate-spin')} />
-                {isRequerying ? 'Requerying…' : 'Requery'}
+                {isRequerying
+                  ? 'Verifying…'
+                  : isWalletFunding
+                    ? 'Verify payment'
+                    : 'Requery'}
               </button>
             ) : null}
             {transaction ? (
@@ -387,7 +435,11 @@ export function BusinessTransactionDetailModal({
                       {getTransactionTitle(transaction)}
                       {isElectricity ? ' — Prepaid' : ''}
                     </p>
-                    <p className="mt-1 text-sm text-gray-600">{getProviderLabel(transaction)}</p>
+                    <p className="mt-1 text-sm text-gray-600">
+                      {isWalletCredit
+                        ? paymentMethodLabel
+                        : getProviderLabel(transaction)}
+                    </p>
                     <div className="mt-2 flex flex-wrap items-center gap-2">
                       <StatusBadge status={normalizeStatusBadge(transaction.status)} />
                       <span className="rounded-full bg-blue-light px-2 py-0.5 text-xs font-medium text-blue-normal">
@@ -553,12 +605,43 @@ export function BusinessTransactionDetailModal({
                   </>
                 )}
 
-                {isWallet ? (
+                {isWalletFunding ? (
                   <>
-                    <DetailRow label="Type" value="Wallet credit" />
+                    <DetailRow label="Type" value="Wallet funding" />
                     <DetailRow label="Payment method" value={paymentMethodLabel} />
+                    <DetailRow
+                      label="Description"
+                      value={transaction.description || 'Company wallet top-up'}
+                    />
                     <DetailRow label="Branch" value={transaction.branchName} />
-                    <DetailRow label="Amount credited" value={formatPrice(transaction.total_amount)} strong />
+                    <DetailRow
+                      label="Amount credited"
+                      value={formatPrice(transaction.amount_paid || transaction.amount || 0)}
+                      strong
+                    />
+                  </>
+                ) : null}
+
+                {isAllocate ? (
+                  <>
+                    <DetailRow
+                      label="Type"
+                      value={
+                        transaction.entryType === 'debit'
+                          ? 'Allocation to branch'
+                          : 'Allocation received'
+                      }
+                    />
+                    <DetailRow label="Branch" value={transaction.branchName} />
+                    <DetailRow
+                      label="Description"
+                      value={transaction.description || 'Wallet allocation'}
+                    />
+                    <DetailRow
+                      label="Amount"
+                      value={formatPrice(transaction.amount_paid || transaction.amount || 0)}
+                      strong
+                    />
                   </>
                 ) : null}
               </div>

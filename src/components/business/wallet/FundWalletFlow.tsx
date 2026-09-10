@@ -24,7 +24,7 @@ import {
   type WalletFundInvoice,
 } from '@/constants/walletFund';
 import { useBusinessAuth } from '@/context/BusinessAuthContext';
-import { BusinessApiError, businessWalletApi } from '@/lib/businessApi';
+import { BusinessApiError, businessAuthStorage, businessWalletApi } from '@/lib/businessApi';
 import { formatPrice } from '@/utils/formatPrice';
 import { cn } from '@/lib/utils';
 
@@ -134,6 +134,10 @@ export function FundWalletFlow() {
   );
 
   useEffect(() => {
+    businessAuthStorage.syncTokensAcrossTabs();
+  }, []);
+
+  useEffect(() => {
     const reference = searchParams.get('reference');
     const status = searchParams.get('status');
     if (!reference || handledCallbackRef.current === reference) return;
@@ -198,6 +202,7 @@ export function FundWalletFlow() {
     setView('card-waiting');
 
     try {
+      businessAuthStorage.syncTokensAcrossTabs();
       const init = await businessWalletApi.fundCard({
         amount,
         email: user?.email || business?.email,
