@@ -11,11 +11,22 @@ import {
 } from 'react';
 import type { BusinessDashboardData, BusinessRole, BusinessUserProfile } from '@/types/business';
 import { canAccessBusiness } from '@/constants/businessNavPermissions';
+import { ALL_BUSINESS_ROLES } from '@/constants/businessRoles';
 import { getMockDashboardForRole, MOCK_SUPER_ADMIN } from '@/data/businessMocks';
 
 const TOKEN_KEY = 'businessToken';
 const PROFILE_KEY = 'businessProfile';
 const ROLE_KEY = 'businessDemoRole';
+
+function normalizeStoredRole(raw: string | null): BusinessRole {
+  const aliases: Record<string, BusinessRole> = {
+    finance_manager: 'hq_finance',
+    operations_officer: 'branch_operations',
+    viewer: 'hq_viewer',
+  };
+  const mapped = (raw && aliases[raw] ? aliases[raw] : raw) as BusinessRole;
+  return ALL_BUSINESS_ROLES.includes(mapped) ? mapped : 'super_admin';
+}
 
 type BusinessAuthContextValue = {
   user: BusinessUserProfile | null;
@@ -47,7 +58,7 @@ export function BusinessAuthProvider({ children }: { children: ReactNode }) {
 
     const token = sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY);
     const profileRaw = sessionStorage.getItem(PROFILE_KEY) || localStorage.getItem(PROFILE_KEY);
-    const role = (sessionStorage.getItem(ROLE_KEY) as BusinessRole) || 'super_admin';
+    const role = normalizeStoredRole(sessionStorage.getItem(ROLE_KEY));
 
     setHasToken(Boolean(token));
 
@@ -133,7 +144,14 @@ export function useBusinessAuth(): BusinessAuthContextValue {
 /** Dev helper — quick role switch without re-login */
 export function useBusinessDemoRoles() {
   return {
-    roles: ['super_admin', 'finance_manager', 'operations_officer', 'viewer'] as BusinessRole[],
+    roles: [
+      'super_admin',
+      'hq_finance',
+      'hq_operations',
+      'branch_admin',
+      'branch_operations',
+      'hq_viewer',
+    ] as BusinessRole[],
     defaultSuperAdmin: MOCK_SUPER_ADMIN,
   };
 }

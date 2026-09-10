@@ -61,3 +61,29 @@ export async function mockVerifyEmailOtp(email: string, otp: string): Promise<vo
     throw new Error(`Invalid OTP. Demo code is ${DEMO_EMAIL_OTP}.`);
   }
 }
+
+export const DEMO_PHONE_OTP = '123456';
+
+export async function mockSendPhoneOtp(phone: string): Promise<void> {
+  await delay(700);
+
+  const digits = phone.replace(/\D/g, '');
+  const normalized =
+    digits.startsWith('234') && digits.length === 13 ? `0${digits.slice(3)}` : digits;
+
+  if (!/^0[7-9]\d{9}$/.test(normalized)) {
+    throw new Error('Enter a valid Nigerian phone number (e.g. 08012345678).');
+  }
+}
+
+export async function mockVerifyPhoneOtp(phone: string, otp: string): Promise<void> {
+  await delay(500);
+
+  if (!phone) {
+    throw new Error('Business phone is required.');
+  }
+
+  if (otp !== DEMO_PHONE_OTP) {
+    throw new Error(`Invalid OTP. Demo code is ${DEMO_PHONE_OTP}.`);
+  }
+}

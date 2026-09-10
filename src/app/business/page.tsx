@@ -10,6 +10,17 @@ import { BusinessTransactionList } from '@/components/business/BusinessTransacti
 import { useBusinessAuth } from '@/context/BusinessAuthContext';
 import { getMockDashboardForRole, getWalletBalanceDisplayForRole } from '@/data/businessMocks';
 import { formatPrice } from '@/utils/formatPrice';
+import { formatAdminRoleLabel } from '@/utils/businessRoleDisplay';
+import type { BusinessRole } from '@/types/business';
+
+const DEMO_ROLES: BusinessRole[] = [
+  'super_admin',
+  'hq_finance',
+  'hq_operations',
+  'branch_admin',
+  'branch_operations',
+  'hq_viewer',
+];
 
 function StatCard({
   label,
@@ -61,22 +72,20 @@ export default function BusinessDashboardPage() {
 
         {process.env.NODE_ENV === 'development' && (
           <div className="flex flex-wrap gap-2">
-            {(['super_admin', 'finance_manager', 'operations_officer', 'viewer'] as const).map(
-              (role) => (
-                <button
-                  key={role}
-                  type="button"
-                  onClick={() => setDemoRole(role)}
-                  className={`rounded-full px-3 py-1 text-xs font-medium ${
-                    (user?.role ?? demoRole) === role
-                      ? 'bg-blue-normal text-white'
-                      : 'bg-gray-100 text-gray-700'
-                  }`}
-                >
-                  {role.replace('_', ' ')}
-                </button>
-              )
-            )}
+            {DEMO_ROLES.map((role) => (
+              <button
+                key={role}
+                type="button"
+                onClick={() => setDemoRole(role)}
+                className={`rounded-full px-3 py-1 text-xs font-medium ${
+                  (user?.role ?? demoRole) === role
+                    ? 'bg-blue-normal text-white'
+                    : 'bg-gray-100 text-gray-700'
+                }`}
+              >
+                {formatAdminRoleLabel(role)}
+              </button>
+            ))}
           </div>
         )}
       </div>

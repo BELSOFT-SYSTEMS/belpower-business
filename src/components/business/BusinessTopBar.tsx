@@ -1,8 +1,8 @@
 'use client';
 
 import Image from 'next/image';
-import Link from 'next/link';
-import { Bell, LogOut, Menu } from 'lucide-react';
+import { LogOut, Menu } from 'lucide-react';
+import { BusinessNotificationsDropdown } from '@/components/business/BusinessNotificationsDropdown';
 import { useBusinessAuth } from '@/context/BusinessAuthContext';
 import { formatAdminRoleLabel } from '@/utils/businessRoleDisplay';
 
@@ -54,13 +54,7 @@ export function BusinessTopBar({ onMenuClick }: BusinessTopBarProps) {
             </span>
           )}
 
-          <Link
-            href="/business/notifications"
-            className="rounded-lg p-2 text-gray-600 hover:bg-gray-100"
-            aria-label="Notifications"
-          >
-            <Bell className="h-5 w-5" />
-          </Link>
+          <BusinessNotificationsDropdown />
 
           <button
             type="button"

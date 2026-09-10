@@ -52,5 +52,39 @@ export function normalizeDiscoKey(raw: string): string {
 export function getDiscoLogoPath(providerOrCode: string): string {
   if (!providerOrCode) return GENERIC;
   const key = normalizeDiscoKey(providerOrCode);
-  return DISCO_LOGO_MAP[key] || GENERIC;
+  if (DISCO_LOGO_MAP[key]) return DISCO_LOGO_MAP[key];
+
+  // Canonical business codes (ABUJA, IKEJA, PH, …) and common aliases.
+  const aliases: Record<string, string> = {
+    abuza: 'abuja',
+    aedc: 'aedc',
+    abuja: 'abuja',
+    eko: 'eko',
+    ekedc: 'ekedc',
+    ikeja: 'ikeja',
+    ikedc: 'ikedc',
+    ibadan: 'ibadan',
+    ibedc: 'ibadan',
+    enugu: 'enugu',
+    eedc: 'enugu',
+    ph: 'ph',
+    phed: 'ph',
+    phedc: 'ph',
+    jos: 'jos',
+    jed: 'jos',
+    jedc: 'jos',
+    kaduna: 'kaduna',
+    kaedc: 'kaduna',
+    kaedco: 'kaduna',
+    kano: 'kano',
+    kedco: 'kano',
+    benin: 'benin',
+    bedc: 'benin',
+    yola: 'yola',
+    yedc: 'yola',
+  };
+  const aliasKey = aliases[key];
+  if (aliasKey && DISCO_LOGO_MAP[aliasKey]) return DISCO_LOGO_MAP[aliasKey];
+
+  return GENERIC;
 }

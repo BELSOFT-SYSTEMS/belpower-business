@@ -1,8 +1,12 @@
 export type BusinessRole =
   | 'super_admin'
-  | 'finance_manager'
-  | 'operations_officer'
-  | 'viewer';
+  | 'hq_finance'
+  | 'hq_operations'
+  | 'hq_viewer'
+  | 'branch_admin'
+  | 'branch_finance'
+  | 'branch_operations'
+  | 'branch_viewer';
 
 export type BusinessProfile = {
   id: string;
@@ -101,11 +105,37 @@ export type BusinessTeamMember = {
 export type BusinessBeneficiary = {
   id: string;
   label: string;
-  service: 'electricity' | 'airtime' | 'data' | 'cable';
+  /** `phone` is shared for airtime + data — one number list for both. */
+  service: 'electricity' | 'phone' | 'cable' | 'airtime' | 'data';
   provider: string;
   accountNumber: string;
   branchName: string;
   createdAt: string;
+  meterType?: 'prepaid' | 'postpaid';
+  customerName?: string;
+  address?: string;
+  isPrimary?: boolean;
+  verified?: boolean;
+};
+
+/** Phone entry inside a numbers group (for bulk airtime/data). */
+export type BeneficiaryGroupMember = {
+  id: string;
+  label?: string;
+  provider: string;
+  accountNumber: string;
+  verified?: boolean;
+};
+
+/** Named set of phone numbers — usable for airtime or data bulk pay. */
+export type BeneficiaryGroup = {
+  id: string;
+  name: string;
+  service: 'phone';
+  branchName: string;
+  createdAt: string;
+  isPrimary?: boolean;
+  members: BeneficiaryGroupMember[];
 };
 
 export type BusinessNotification = {

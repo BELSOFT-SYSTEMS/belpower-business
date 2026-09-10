@@ -13,7 +13,7 @@ function AcceptInviteForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const inviteEmail = searchParams.get('email') ?? 'invited@company.com';
-  const inviteRole = searchParams.get('role') ?? 'operations_officer';
+  const inviteRole = searchParams.get('role') ?? 'branch_operations';
   const inviteBranch = searchParams.get('branch') ?? 'Abuja Branch';
   const [submitting, setSubmitting] = useState(false);
   const [password, setPassword] = useState('');

@@ -5,7 +5,6 @@ import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import {
   BarChart3,
-  Bell,
   Building2,
   ChevronLeft,
   ChevronRight,
@@ -16,12 +15,15 @@ import {
   Users,
   Wallet,
 } from 'lucide-react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { cn } from '@/lib/utils';
-import { BUSINESS_NAV_ITEMS } from '@/constants/businessNavPermissions';
+import {
+  BUSINESS_NAV_ITEMS,
+  type BusinessNavItem,
+} from '@/constants/businessNavPermissions';
 import { useBusinessAuth } from '@/context/BusinessAuthContext';
 import { useBusinessShell } from '@/context/BusinessShellContext';
 import '@/styles/businessShell.css';
-import type { ReactNode } from 'react';
 
 const NAV_ICONS: Record<string, ReactNode> = {
   '/business': <LayoutDashboard size={18} />,
@@ -32,18 +34,53 @@ const NAV_ICONS: Record<string, ReactNode> = {
   '/business/transactions': <Receipt size={18} />,
   '/business/analytics': <BarChart3 size={18} />,
   '/business/team': <Users size={18} />,
-  '/business/notifications': <Bell size={18} />,
   '/business/settings': <Settings size={18} />,
 };
+
+function isPathMatch(pathname: string, href: string): boolean {
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
+function isNavSectionActive(item: BusinessNavItem, pathname: string): boolean {
+  if (item.children?.length) {
+    return item.children.some((child) => isPathMatch(pathname, child.href));
+  }
+
+  return (
+    pathname === item.href ||
+    (item.href !== '/business' && pathname.startsWith(item.href))
+  );
+}
 
 export function BusinessSidebar({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
   const { canAccess } = useBusinessAuth();
   const { sidebarCollapsed, toggleSidebarCollapsed } = useBusinessShell();
+  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
 
   const visibleItems = BUSINESS_NAV_ITEMS.filter(
     (item) => !item.permission || canAccess(item.permission)
   );
+
+  useEffect(() => {
+    setCollapsedSections((current) => {
+      let changed = false;
+      const next = { ...current };
+
+      for (const item of BUSINESS_NAV_ITEMS) {
+        if (!item.children?.length) continue;
+        // Re-open a section when navigating into it from outside
+        // (e.g. dashboard quick action), but keep a manual collapse
+        // while the user remains inside that section.
+        if (!isNavSectionActive(item, pathname) && next[item.href]) {
+          delete next[item.href];
+          changed = true;
+        }
+      }
+
+      return changed ? next : current;
+    });
+  }, [pathname]);
 
   const collapseLabel = sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar';
 
@@ -77,19 +114,40 @@ export function BusinessSidebar({ onNavigate }: { onNavigate?: () => void }) {
         <nav className="business_sidebar_nav">
           <ul className="space-y-1">
             {visibleItems.map((item) => {
-              const active =
-                pathname === item.href ||
-                (item.href !== '/business' && pathname.startsWith(item.href));
+              const sectionActive = isNavSectionActive(item, pathname);
+              const expanded =
+                Boolean(item.children?.length) &&
+                sectionActive &&
+                !collapsedSections[item.href];
 
               return (
                 <li key={item.href}>
                   <Link
                     href={item.href}
                     title={sidebarCollapsed ? item.name : undefined}
-                    onClick={onNavigate}
+                    onClick={(event) => {
+                      if (item.children?.length && sectionActive && expanded) {
+                        event.preventDefault();
+                        setCollapsedSections((current) => ({
+                          ...current,
+                          [item.href]: true,
+                        }));
+                        return;
+                      }
+
+                      if (item.children?.length) {
+                        setCollapsedSections((current) => {
+                          const next = { ...current };
+                          delete next[item.href];
+                          return next;
+                        });
+                      }
+
+                      onNavigate?.();
+                    }}
                     className={cn(
                       'business_sidebar_nav_link rounded-lg px-3 py-2 text-sm font-medium transition-colors',
-                      active
+                      sectionActive
                         ? 'bg-blue-normal text-white'
                         : 'text-gray-700 hover:bg-gray-100'
                     )}
@@ -99,7 +157,7 @@ export function BusinessSidebar({ onNavigate }: { onNavigate?: () => void }) {
                     </span>
                     <span className="business_sidebar_nav_label">{item.name}</span>
                   </Link>
-                  {item.children && active && (
+                  {item.children && expanded && (
                     <ul className="business_sidebar_children ml-3 mt-1 space-y-0.5 border-l border-gray-200 pl-3">
                       {item.children
                         .filter((child) => !child.permission || canAccess(child.permission))
@@ -110,7 +168,7 @@ export function BusinessSidebar({ onNavigate }: { onNavigate?: () => void }) {
                               onClick={onNavigate}
                               className={cn(
                                 'block rounded-md px-2 py-1.5 text-xs',
-                                pathname === child.href
+                                isPathMatch(pathname, child.href)
                                   ? 'font-semibold text-blue-normal'
                                   : 'text-gray-600 hover:text-gray-900'
                               )}

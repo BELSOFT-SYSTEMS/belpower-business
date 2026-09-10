@@ -1,4 +1,9 @@
 import type { BusinessRole } from '@/types/business';
+import {
+  canAllocateCompanyWallet,
+  canFundCompanyWallet,
+  isSuperAdminRole as isSuperAdminRoleHelper,
+} from '@/constants/businessRoles';
 
 export type BusinessNavItem = {
   name: string;
@@ -37,8 +42,97 @@ export const BUSINESS_NAV_ITEMS: BusinessNavItem[] = [
   { name: 'Transactions', href: '/business/transactions', permission: 'transactions.view' },
   { name: 'Analytics', href: '/business/analytics', permission: 'analytics.view' },
   { name: 'Team Management', href: '/business/team', permission: 'team.view' },
-  { name: 'Notifications', href: '/business/notifications', permission: 'notifications.view' },
   { name: 'Business Settings', href: '/business/settings', permission: 'business.settings.manage' },
+];
+
+const HQ_FINANCE_PERMISSIONS = [
+  'business.view',
+  'wallet.view',
+  'wallet.fund',
+  'wallet.allocate',
+  'wallet.statements',
+  'payments.single',
+  'payments.bulk',
+  'beneficiaries.view',
+  'transactions.view',
+  'transactions.export',
+  'analytics.view',
+  'analytics.export',
+  'notifications.view',
+  'branches.view',
+];
+
+const HQ_OPS_PERMISSIONS = [
+  'business.view',
+  'wallet.view',
+  'wallet.statements',
+  'payments.single',
+  'payments.bulk',
+  'beneficiaries.view',
+  'beneficiaries.manage',
+  'transactions.view',
+  'notifications.view',
+];
+
+const HQ_VIEWER_PERMISSIONS = [
+  'business.view',
+  'wallet.view',
+  'wallet.statements',
+  'transactions.view',
+  'analytics.view',
+  'notifications.view',
+  'audit.view',
+  'branches.view',
+];
+
+const BRANCH_ADMIN_PERMISSIONS = [
+  'business.view',
+  'wallet.view',
+  'wallet.statements',
+  'payments.single',
+  'payments.bulk',
+  'beneficiaries.view',
+  'beneficiaries.manage',
+  'transactions.view',
+  'transactions.export',
+  'analytics.view',
+  'team.view',
+  'team.invite',
+  'team.manage',
+  'notifications.view',
+];
+
+const BRANCH_FINANCE_PERMISSIONS = [
+  'business.view',
+  'wallet.view',
+  'wallet.statements',
+  'payments.single',
+  'payments.bulk',
+  'beneficiaries.view',
+  'transactions.view',
+  'transactions.export',
+  'analytics.view',
+  'notifications.view',
+];
+
+const BRANCH_OPS_PERMISSIONS = [
+  'business.view',
+  'wallet.view',
+  'payments.single',
+  'payments.bulk',
+  'beneficiaries.view',
+  'beneficiaries.manage',
+  'transactions.view',
+  'notifications.view',
+];
+
+const BRANCH_VIEWER_PERMISSIONS = [
+  'business.view',
+  'wallet.view',
+  'transactions.view',
+  'analytics.view',
+  'notifications.view',
+  'audit.view',
 ];
 
 export const ROLE_PERMISSIONS: Record<BusinessRole, string[]> = {
@@ -68,39 +162,13 @@ export const ROLE_PERMISSIONS: Record<BusinessRole, string[]> = {
     'notifications.view',
     'audit.view',
   ],
-  finance_manager: [
-    'business.view',
-    'wallet.view',
-    'wallet.fund',
-    'wallet.allocate',
-    'wallet.statements',
-    'payments.single',
-    'payments.bulk',
-    'beneficiaries.view',
-    'transactions.view',
-    'transactions.export',
-    'analytics.view',
-    'analytics.export',
-    'notifications.view',
-  ],
-  operations_officer: [
-    'business.view',
-    'wallet.view',
-    'payments.single',
-    'payments.bulk',
-    'beneficiaries.view',
-    'beneficiaries.manage',
-    'transactions.view',
-    'notifications.view',
-  ],
-  viewer: [
-    'business.view',
-    'wallet.view',
-    'transactions.view',
-    'analytics.view',
-    'notifications.view',
-    'audit.view',
-  ],
+  hq_finance: HQ_FINANCE_PERMISSIONS,
+  hq_operations: HQ_OPS_PERMISSIONS,
+  hq_viewer: HQ_VIEWER_PERMISSIONS,
+  branch_admin: BRANCH_ADMIN_PERMISSIONS,
+  branch_finance: BRANCH_FINANCE_PERMISSIONS,
+  branch_operations: BRANCH_OPS_PERMISSIONS,
+  branch_viewer: BRANCH_VIEWER_PERMISSIONS,
 };
 
 export const PUBLIC_BUSINESS_PATHS = [
@@ -140,7 +208,6 @@ export function getRequiredPermissionForRoute(pathname: string): string | null {
     '/business/transactions': 'transactions.view',
     '/business/analytics': 'analytics.view',
     '/business/team': 'team.view',
-    '/business/notifications': 'notifications.view',
   };
 
   if (exact[normalized]) return exact[normalized];
@@ -152,5 +219,7 @@ export function getRequiredPermissionForRoute(pathname: string): string | null {
 }
 
 export function isSuperAdminRole(role: BusinessRole | undefined): boolean {
-  return role === 'super_admin';
+  return isSuperAdminRoleHelper(role);
 }
+
+export { canAllocateCompanyWallet, canFundCompanyWallet };

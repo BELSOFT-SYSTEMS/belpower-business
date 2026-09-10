@@ -1,6 +1,7 @@
 import type {
   BusinessAnalyticsData,
   BusinessBeneficiary,
+  BeneficiaryGroup,
   BusinessBranch,
   BusinessDashboardData,
   BusinessNotification,
@@ -14,6 +15,10 @@ import type {
   VirtualAccountInfo,
   WalletStatementRow,
 } from '@/types/business';
+import {
+  canViewCompanyWallet,
+  isBranchScopedRole,
+} from '@/constants/businessRoles';
 
 export const MOCK_SUPER_ADMIN: BusinessUserProfile = {
   id: 'user-hq-1',
@@ -25,34 +30,92 @@ export const MOCK_SUPER_ADMIN: BusinessUserProfile = {
   branchName: 'Head Office',
 };
 
-export const MOCK_FINANCE_MANAGER: BusinessUserProfile = {
-  id: 'user-finance-1',
+export const MOCK_HQ_FINANCE: BusinessUserProfile = {
+  id: 'user-hq-finance-1',
   firstName: 'Chioma',
   lastName: 'Eze',
-  email: 'finance@belsoftsystems.com',
-  role: 'finance_manager',
-  branchId: null,
-  branchName: null,
+  email: 'finance.hq@belsoftsystems.com',
+  role: 'hq_finance',
+  branchId: 'branch-hq',
+  branchName: 'Head Office',
 };
 
-export const MOCK_OPS_OFFICER: BusinessUserProfile = {
-  id: 'user-abuja-1',
+export const MOCK_HQ_OPS: BusinessUserProfile = {
+  id: 'user-hq-ops-1',
+  firstName: 'Ifeanyi',
+  lastName: 'Okoro',
+  email: 'ops.hq@belsoftsystems.com',
+  role: 'hq_operations',
+  branchId: 'branch-hq',
+  branchName: 'Head Office',
+};
+
+export const MOCK_HQ_VIEWER: BusinessUserProfile = {
+  id: 'user-hq-viewer-1',
+  firstName: 'Tunde',
+  lastName: 'Bakare',
+  email: 'viewer.hq@belsoftsystems.com',
+  role: 'hq_viewer',
+  branchId: 'branch-hq',
+  branchName: 'Head Office',
+};
+
+export const MOCK_BRANCH_ADMIN_LAGOS: BusinessUserProfile = {
+  id: 'user-lagos-admin-1',
+  firstName: 'Emeka',
+  lastName: 'Nwosu',
+  email: 'admin.lagos@belsoftsystems.com',
+  role: 'branch_admin',
+  branchId: 'branch-lagos',
+  branchName: 'Lagos Branch',
+};
+
+export const MOCK_BRANCH_FINANCE_LAGOS: BusinessUserProfile = {
+  id: 'user-lagos-finance-1',
+  firstName: 'Ngozi',
+  lastName: 'Adeyemi',
+  email: 'finance.lagos@belsoftsystems.com',
+  role: 'branch_finance',
+  branchId: 'branch-lagos',
+  branchName: 'Lagos Branch',
+};
+
+export const MOCK_BRANCH_OPS_ABUJA: BusinessUserProfile = {
+  id: 'user-abuja-ops-1',
   firstName: 'Amina',
   lastName: 'Okafor',
   email: 'ops.abuja@belsoftsystems.com',
-  role: 'operations_officer',
+  role: 'branch_operations',
   branchId: 'branch-abuja',
   branchName: 'Abuja Branch',
 };
 
-export const MOCK_VIEWER: BusinessUserProfile = {
-  id: 'user-viewer-1',
-  firstName: 'Tunde',
-  lastName: 'Bakare',
-  email: 'viewer@belsoftsystems.com',
-  role: 'viewer',
-  branchId: 'branch-hq',
-  branchName: 'Head Office',
+export const MOCK_BRANCH_VIEWER_ABUJA: BusinessUserProfile = {
+  id: 'user-abuja-viewer-1',
+  firstName: 'Fatima',
+  lastName: 'Bello',
+  email: 'viewer.abuja@belsoftsystems.com',
+  role: 'branch_viewer',
+  branchId: 'branch-abuja',
+  branchName: 'Abuja Branch',
+};
+
+/** @deprecated Use MOCK_HQ_FINANCE — kept as alias for older imports during transition */
+export const MOCK_FINANCE_MANAGER = MOCK_HQ_FINANCE;
+/** @deprecated Use MOCK_BRANCH_OPS_ABUJA */
+export const MOCK_OPS_OFFICER = MOCK_BRANCH_OPS_ABUJA;
+/** @deprecated Use MOCK_HQ_VIEWER */
+export const MOCK_VIEWER = MOCK_HQ_VIEWER;
+
+export const DEMO_ROLE_PROFILES: Record<BusinessRole, BusinessUserProfile> = {
+  super_admin: MOCK_SUPER_ADMIN,
+  hq_finance: MOCK_HQ_FINANCE,
+  hq_operations: MOCK_HQ_OPS,
+  hq_viewer: MOCK_HQ_VIEWER,
+  branch_admin: MOCK_BRANCH_ADMIN_LAGOS,
+  branch_finance: MOCK_BRANCH_FINANCE_LAGOS,
+  branch_operations: MOCK_BRANCH_OPS_ABUJA,
+  branch_viewer: MOCK_BRANCH_VIEWER_ABUJA,
 };
 
 export const MOCK_VIRTUAL_ACCOUNT: VirtualAccountInfo = {
@@ -106,6 +169,28 @@ export const MOCK_BRANCHES: BusinessBranch[] = [
     meterCount: 0,
     status: 'active',
   },
+  {
+    id: 'branch-kano',
+    name: 'Kano Branch',
+    code: 'KAN',
+    address: '14 Zoo Road',
+    city: 'Kano',
+    isHeadOffice: false,
+    userCount: 1,
+    meterCount: 0,
+    status: 'active',
+  },
+  {
+    id: 'branch-enugu',
+    name: 'Enugu Branch',
+    code: 'ENU',
+    address: '7 Ogui Road',
+    city: 'Enugu',
+    isHeadOffice: false,
+    userCount: 1,
+    meterCount: 0,
+    status: 'inactive',
+  },
 ];
 
 export const MOCK_TEAM: BusinessTeamMember[] = [
@@ -121,48 +206,114 @@ export const MOCK_TEAM: BusinessTeamMember[] = [
     lastActiveAt: '2026-06-11T10:30:00.000Z',
   },
   {
-    id: 'user-finance-1',
+    id: 'user-hq-finance-1',
     firstName: 'Chioma',
     lastName: 'Eze',
-    email: 'finance@belsoftsystems.com',
-    role: 'finance_manager',
-    branchId: null,
-    branchName: 'All branches',
+    email: 'finance.hq@belsoftsystems.com',
+    role: 'hq_finance',
+    branchId: 'branch-hq',
+    branchName: 'Head Office',
     status: 'active',
     lastActiveAt: '2026-06-11T08:00:00.000Z',
   },
   {
-    id: 'user-abuja-1',
-    firstName: 'Amina',
-    lastName: 'Okafor',
-    email: 'ops.abuja@belsoftsystems.com',
-    role: 'operations_officer',
-    branchId: 'branch-abuja',
-    branchName: 'Abuja Branch',
+    id: 'user-hq-ops-1',
+    firstName: 'Ifeanyi',
+    lastName: 'Okoro',
+    email: 'ops.hq@belsoftsystems.com',
+    role: 'hq_operations',
+    branchId: 'branch-hq',
+    branchName: 'Head Office',
     status: 'active',
-    lastActiveAt: '2026-06-10T16:00:00.000Z',
+    lastActiveAt: '2026-06-11T07:40:00.000Z',
   },
   {
-    id: 'user-lagos-1',
+    id: 'user-hq-viewer-1',
+    firstName: 'Tunde',
+    lastName: 'Bakare',
+    email: 'viewer.hq@belsoftsystems.com',
+    role: 'hq_viewer',
+    branchId: 'branch-hq',
+    branchName: 'Head Office',
+    status: 'active',
+    lastActiveAt: '2026-06-10T12:00:00.000Z',
+  },
+  {
+    id: 'user-lagos-admin-1',
     firstName: 'Emeka',
     lastName: 'Nwosu',
-    email: 'ops.lagos@belsoftsystems.com',
-    role: 'operations_officer',
+    email: 'admin.lagos@belsoftsystems.com',
+    role: 'branch_admin',
     branchId: 'branch-lagos',
     branchName: 'Lagos Branch',
     status: 'active',
     lastActiveAt: '2026-06-09T14:20:00.000Z',
   },
   {
-    id: 'user-invite-1',
-    firstName: 'Sarah',
-    lastName: 'Johnson',
-    email: 'sarah@belsoftsystems.com',
-    role: 'viewer',
-    branchId: 'branch-hq',
-    branchName: 'Head Office',
+    id: 'user-lagos-finance-1',
+    firstName: 'Ngozi',
+    lastName: 'Adeyemi',
+    email: 'finance.lagos@belsoftsystems.com',
+    role: 'branch_finance',
+    branchId: 'branch-lagos',
+    branchName: 'Lagos Branch',
+    status: 'active',
+    lastActiveAt: '2026-06-09T11:00:00.000Z',
+  },
+  {
+    id: 'user-lagos-ops-1',
+    firstName: 'Kunle',
+    lastName: 'Balogun',
+    email: 'ops.lagos@belsoftsystems.com',
+    role: 'branch_operations',
+    branchId: 'branch-lagos',
+    branchName: 'Lagos Branch',
+    status: 'active',
+    lastActiveAt: '2026-06-09T10:15:00.000Z',
+  },
+  {
+    id: 'user-lagos-viewer-1',
+    firstName: 'Ada',
+    lastName: 'Okeke',
+    email: 'viewer.lagos@belsoftsystems.com',
+    role: 'branch_viewer',
+    branchId: 'branch-lagos',
+    branchName: 'Lagos Branch',
     status: 'invited',
     lastActiveAt: null,
+  },
+  {
+    id: 'user-abuja-admin-1',
+    firstName: 'Hassan',
+    lastName: 'Ibrahim',
+    email: 'admin.abuja@belsoftsystems.com',
+    role: 'branch_admin',
+    branchId: 'branch-abuja',
+    branchName: 'Abuja Branch',
+    status: 'active',
+    lastActiveAt: '2026-06-10T15:00:00.000Z',
+  },
+  {
+    id: 'user-abuja-ops-1',
+    firstName: 'Amina',
+    lastName: 'Okafor',
+    email: 'ops.abuja@belsoftsystems.com',
+    role: 'branch_operations',
+    branchId: 'branch-abuja',
+    branchName: 'Abuja Branch',
+    status: 'active',
+    lastActiveAt: '2026-06-10T16:00:00.000Z',
+  },
+  {
+    id: 'user-abuja-viewer-1',
+    firstName: 'Fatima',
+    lastName: 'Bello',
+    email: 'viewer.abuja@belsoftsystems.com',
+    role: 'branch_viewer',
+    branchId: 'branch-abuja',
+    branchName: 'Abuja Branch',
+    status: 'active',
+    lastActiveAt: '2026-06-08T09:00:00.000Z',
   },
 ];
 
@@ -175,33 +326,254 @@ export const MOCK_BENEFICIARIES: BusinessBeneficiary[] = [
     accountNumber: '45022530096',
     branchName: 'Head Office',
     createdAt: '2026-05-01T09:00:00.000Z',
+    meterType: 'prepaid',
+    customerName: 'Belsoft Systems Ltd',
+    address: '12 Adetokunbo Ademola, Victoria Island, Lagos',
+    isPrimary: true,
+    verified: true,
   },
   {
     id: 'ben-2',
-    label: 'Abuja office line',
-    service: 'airtime',
-    provider: 'mtn',
-    accountNumber: '08031234567',
+    label: 'Abuja branch meter',
+    service: 'electricity',
+    provider: 'ABUJA',
+    accountNumber: '62123456789',
     branchName: 'Abuja Branch',
     createdAt: '2026-05-10T11:00:00.000Z',
+    meterType: 'prepaid',
+    customerName: 'Belsoft Systems — Abuja Branch',
+    address: 'Plot 14 Gana Street, Maitama, Abuja',
+    verified: true,
   },
   {
     id: 'ben-3',
-    label: 'Lagos staff data',
-    service: 'data',
-    provider: 'airtel',
-    accountNumber: '08099887766',
+    label: 'Lagos branch meter',
+    service: 'electricity',
+    provider: 'IKEJA',
+    accountNumber: '04187654321',
     branchName: 'Lagos Branch',
     createdAt: '2026-05-15T14:00:00.000Z',
+    meterType: 'postpaid',
+    customerName: 'Belsoft Systems — Lagos Branch',
+    address: '18 Adeola Odeku, Victoria Island, Lagos',
+    verified: true,
   },
   {
     id: 'ben-4',
-    label: 'HQ DSTV',
+    label: 'PH warehouse meter',
+    service: 'electricity',
+    provider: 'PH',
+    accountNumber: '55221100998',
+    branchName: 'Port Harcourt Branch',
+    createdAt: '2026-05-20T10:00:00.000Z',
+    meterType: 'prepaid',
+    customerName: 'Belsoft Systems — PH Branch',
+    address: '18 Aba Road, Port Harcourt',
+    verified: true,
+  },
+  {
+    id: 'ben-air-1',
+    label: 'HQ office line',
+    service: 'phone',
+    provider: 'mtn',
+    accountNumber: '08031234567',
+    branchName: 'Head Office',
+    createdAt: '2026-05-02T09:00:00.000Z',
+    isPrimary: true,
+    verified: true,
+  },
+  {
+    id: 'ben-air-2',
+    label: 'Abuja ops phone',
+    service: 'phone',
+    provider: 'airtel',
+    accountNumber: '08021234567',
+    branchName: 'Abuja Branch',
+    createdAt: '2026-05-12T11:00:00.000Z',
+    verified: true,
+  },
+  {
+    id: 'ben-air-3',
+    label: 'Lagos front desk',
+    service: 'phone',
+    provider: 'glo',
+    accountNumber: '08051234567',
+    branchName: 'Lagos Branch',
+    createdAt: '2026-05-18T14:00:00.000Z',
+    verified: true,
+  },
+  {
+    id: 'ben-data-1',
+    label: 'HQ router SIM',
+    service: 'phone',
+    provider: 'mtn',
+    accountNumber: '08061234567',
+    branchName: 'Head Office',
+    createdAt: '2026-05-03T09:00:00.000Z',
+    verified: true,
+  },
+  {
+    id: 'ben-data-2',
+    label: 'Abuja backup data',
+    service: 'phone',
+    provider: 'airtel',
+    accountNumber: '08081234567',
+    branchName: 'Abuja Branch',
+    createdAt: '2026-05-14T10:00:00.000Z',
+    verified: true,
+  },
+  {
+    id: 'ben-data-3',
+    label: 'Lagos field tablet',
+    service: 'phone',
+    provider: '9mobile',
+    accountNumber: '08091234567',
+    branchName: 'Lagos Branch',
+    createdAt: '2026-05-22T12:00:00.000Z',
+    verified: true,
+  },
+  {
+    id: 'ben-cable-1',
+    label: 'HQ conference TV',
     service: 'cable',
     provider: 'dstv',
     accountNumber: '7012345678',
     branchName: 'Head Office',
-    createdAt: '2026-05-20T10:00:00.000Z',
+    createdAt: '2026-05-04T09:00:00.000Z',
+    customerName: 'Belsoft Systems Ltd',
+    isPrimary: true,
+    verified: true,
+  },
+  {
+    id: 'ben-cable-2',
+    label: 'Lagos lounge GOtv',
+    service: 'cable',
+    provider: 'gotv',
+    accountNumber: '8023456789',
+    branchName: 'Lagos Branch',
+    createdAt: '2026-05-16T11:00:00.000Z',
+    customerName: 'Belsoft Systems — Lagos Branch',
+    verified: true,
+  },
+  {
+    id: 'ben-cable-3',
+    label: 'Abuja waiting room',
+    service: 'cable',
+    provider: 'startimes',
+    accountNumber: '9034567890',
+    branchName: 'Abuja Branch',
+    createdAt: '2026-05-25T15:00:00.000Z',
+    customerName: 'Belsoft Systems — Abuja Branch',
+    verified: true,
+  },
+];
+
+/** Named number groups for airtime/data — consumed later by bulk payments. */
+export const MOCK_BENEFICIARY_GROUPS: BeneficiaryGroup[] = [
+  {
+    id: 'grp-air-1',
+    name: 'HQ Staff',
+    service: 'phone',
+    branchName: 'Head Office',
+    createdAt: '2026-05-06T09:00:00.000Z',
+    isPrimary: true,
+    members: [
+      {
+        id: 'grp-air-1-m1',
+        label: 'Ops lead',
+        provider: 'mtn',
+        accountNumber: '08034567890',
+        verified: true,
+      },
+      {
+        id: 'grp-air-1-m2',
+        label: 'Finance desk',
+        provider: 'airtel',
+        accountNumber: '08023456789',
+        verified: true,
+      },
+      {
+        id: 'grp-air-1-m3',
+        label: 'Front desk',
+        provider: 'glo',
+        accountNumber: '08056789012',
+        verified: true,
+      },
+    ],
+  },
+  {
+    id: 'grp-air-2',
+    name: 'Lagos field team',
+    service: 'phone',
+    branchName: 'Lagos Branch',
+    createdAt: '2026-05-19T10:00:00.000Z',
+    members: [
+      {
+        id: 'grp-air-2-m1',
+        label: 'Driver 1',
+        provider: 'mtn',
+        accountNumber: '08123456789',
+        verified: true,
+      },
+      {
+        id: 'grp-air-2-m2',
+        label: 'Driver 2',
+        provider: 'mtn',
+        accountNumber: '08134567890',
+        verified: true,
+      },
+    ],
+  },
+  {
+    id: 'grp-data-1',
+    name: 'Branch routers',
+    service: 'phone',
+    branchName: 'Head Office',
+    createdAt: '2026-05-07T11:00:00.000Z',
+    members: [
+      {
+        id: 'grp-data-1-m1',
+        label: 'Lagos router',
+        provider: 'mtn',
+        accountNumber: '08067890123',
+        verified: true,
+      },
+      {
+        id: 'grp-data-1-m2',
+        label: 'Abuja router',
+        provider: 'airtel',
+        accountNumber: '08078901234',
+        verified: true,
+      },
+      {
+        id: 'grp-data-1-m3',
+        label: 'PH backup',
+        provider: 'glo',
+        accountNumber: '08089012345',
+        verified: true,
+      },
+    ],
+  },
+  {
+    id: 'grp-data-2',
+    name: 'Abuja tablets',
+    service: 'phone',
+    branchName: 'Abuja Branch',
+    createdAt: '2026-05-21T14:00:00.000Z',
+    members: [
+      {
+        id: 'grp-data-2-m1',
+        provider: '9mobile',
+        accountNumber: '08090123456',
+        verified: true,
+      },
+      {
+        id: 'grp-data-2-m2',
+        provider: 'airtel',
+        accountNumber: '08012345678',
+        verified: true,
+      },
+    ],
   },
 ];
 
@@ -237,6 +609,14 @@ export const MOCK_NOTIFICATIONS: BusinessNotification[] = [
     type: 'system',
     read: true,
     createdAt: '2026-06-09T08:00:00.000Z',
+  },
+  {
+    id: 'notif-5',
+    title: 'Branch allocation completed',
+    message: '₦250,000 allocated to Lagos Branch from the company wallet.',
+    type: 'wallet',
+    read: false,
+    createdAt: '2026-06-11T11:05:00.000Z',
   },
 ];
 
@@ -327,15 +707,14 @@ export const MOCK_TRANSACTIONS: BusinessTransactionPreview[] = [
   },
 ];
 
+/** Head Office holds the company wallet — it is not an allocated branch pot. */
+export const HEAD_OFFICE_BRANCH_ID = 'branch-hq';
+
+/**
+ * Allocated balances for operating branches only.
+ * Company funds sit at Head Office (`MOCK_DASHBOARD.wallet.availableBalance`).
+ */
 export const MOCK_BRANCH_WALLET_OVERVIEW: BranchWalletOverview[] = [
-  {
-    branchId: 'branch-hq',
-    branchName: 'Head Office',
-    allocatedBalance: 600000,
-    todaySpend: 85000,
-    monthSpend: 2100000,
-    monthTransactions: 48,
-  },
   {
     branchId: 'branch-lagos',
     branchName: 'Lagos Branch',
@@ -389,7 +768,7 @@ export const MOCK_WALLET_STATEMENTS: WalletStatementRow[] = [
     balanceAfter: 2450000,
     branchName: null,
     performedByName: 'Chioma Eze',
-    performedByRole: 'finance_manager',
+    performedByRole: 'hq_finance',
     status: 'completed',
     createdAt: '2026-06-11T09:00:00.000Z',
   },
@@ -417,7 +796,7 @@ export const MOCK_WALLET_STATEMENTS: WalletStatementRow[] = [
     balanceAfter: 2315000,
     branchName: 'Abuja Branch',
     performedByName: 'Amina Okafor',
-    performedByRole: 'operations_officer',
+    performedByRole: 'branch_operations',
     status: 'completed',
     createdAt: '2026-06-11T09:15:00.000Z',
   },
@@ -445,7 +824,7 @@ export const MOCK_WALLET_STATEMENTS: WalletStatementRow[] = [
     balanceAfter: 2290500,
     branchName: 'Kano Branch',
     performedByName: 'Emeka Nwosu',
-    performedByRole: 'operations_officer',
+    performedByRole: 'branch_operations',
     status: 'pending',
     createdAt: '2026-06-10T16:00:00.000Z',
   },
@@ -459,7 +838,7 @@ export const MOCK_WALLET_STATEMENTS: WalletStatementRow[] = [
     balanceAfter: 2290500,
     branchName: 'Lagos Branch',
     performedByName: 'Emeka Nwosu',
-    performedByRole: 'operations_officer',
+    performedByRole: 'branch_operations',
     status: 'failed',
     createdAt: '2026-06-09T14:30:00.000Z',
   },
@@ -473,7 +852,7 @@ export const MOCK_WALLET_STATEMENTS: WalletStatementRow[] = [
     balanceAfter: 2290500,
     branchName: 'Abuja Branch',
     performedByName: 'Amina Okafor',
-    performedByRole: 'operations_officer',
+    performedByRole: 'branch_operations',
     status: 'completed',
     createdAt: '2026-06-09T09:00:00.000Z',
   },
@@ -487,7 +866,7 @@ export const MOCK_WALLET_STATEMENTS: WalletStatementRow[] = [
     balanceAfter: 1950000,
     branchName: 'Kano Branch',
     performedByName: 'Chioma Eze',
-    performedByRole: 'finance_manager',
+    performedByRole: 'hq_finance',
     status: 'completed',
     createdAt: '2026-06-08T10:00:00.000Z',
   },
@@ -515,7 +894,7 @@ export const MOCK_WALLET_STATEMENTS: WalletStatementRow[] = [
     balanceAfter: 2240000,
     branchName: null,
     performedByName: 'Chioma Eze',
-    performedByRole: 'finance_manager',
+    performedByRole: 'hq_finance',
     status: 'completed',
     createdAt: '2026-06-08T08:00:00.000Z',
   },
@@ -543,7 +922,7 @@ export const MOCK_WALLET_STATEMENTS: WalletStatementRow[] = [
     balanceAfter: 1285000,
     branchName: 'Kano Branch',
     performedByName: 'Emeka Nwosu',
-    performedByRole: 'operations_officer',
+    performedByRole: 'branch_operations',
     status: 'completed',
     createdAt: '2026-06-06T11:30:00.000Z',
   },
@@ -557,7 +936,7 @@ export const MOCK_WALLET_STATEMENTS: WalletStatementRow[] = [
     balanceAfter: 1293000,
     branchName: 'Abuja Branch',
     performedByName: 'Amina Okafor',
-    performedByRole: 'operations_officer',
+    performedByRole: 'branch_operations',
     status: 'completed',
     createdAt: '2026-06-05T14:00:00.000Z',
   },
@@ -585,7 +964,7 @@ export const MOCK_WALLET_STATEMENTS: WalletStatementRow[] = [
     balanceAfter: 1369000,
     branchName: null,
     performedByName: 'Chioma Eze',
-    performedByRole: 'finance_manager',
+    performedByRole: 'hq_finance',
     status: 'completed',
     createdAt: '2026-06-03T08:30:00.000Z',
   },
@@ -603,10 +982,11 @@ export const MOCK_DASHBOARD: BusinessDashboardData = {
   },
   user: MOCK_SUPER_ADMIN,
   wallet: {
-    balance: 2450000,
-    availableBalance: 2450000,
-    todaySpend: 185000,
-    monthSpend: 5120000,
+    // Company wallet held at Head Office (after allocations to other branches).
+    balance: 700000,
+    availableBalance: 700000,
+    todaySpend: 85000,
+    monthSpend: 2100000,
     currency: 'NGN',
     isFrozen: false,
     dailyLimit: 2000000,
@@ -691,10 +1071,14 @@ export function getMockBranchSpendForPeriod(
   role: BusinessRole,
 ): BranchSpendItem[] {
   const spend = MOCK_BRANCH_SPEND_BY_PERIOD[period];
+  const profile = DEMO_ROLE_PROFILES[role];
 
-  if (role === 'operations_officer') {
-    const branchId = MOCK_OPS_OFFICER.branchId!;
-    return spend.filter((item) => item.branchId === branchId);
+  if (isBranchScopedRole(role) && profile.branchId) {
+    return spend.filter((item) => item.branchId === profile.branchId);
+  }
+
+  if (canViewCompanyWallet(role)) {
+    return spend;
   }
 
   return spend;
@@ -702,79 +1086,169 @@ export function getMockBranchSpendForPeriod(
 
 export function getMockDashboardForRole(role: BusinessRole): BusinessDashboardData {
   const base = MOCK_DASHBOARD;
-  if (role === 'operations_officer') {
-    const branchId = MOCK_OPS_OFFICER.branchId!;
+  const profile = DEMO_ROLE_PROFILES[role];
+
+  if (isBranchScopedRole(role) && profile.branchId) {
     return {
       ...base,
-      user: MOCK_OPS_OFFICER,
-      meters: base.meters.filter((m) => m.branchId === branchId),
-      recentTransactions: MOCK_TRANSACTIONS.filter((t) => t.branchName === MOCK_OPS_OFFICER.branchName),
-      branchSpend: base.branchSpend.filter((b) => b.branchId === branchId),
+      user: profile,
+      meters: base.meters.filter((m) => m.branchId === profile.branchId),
+      recentTransactions: MOCK_TRANSACTIONS.filter((t) => t.branchName === profile.branchName),
+      branchSpend: base.branchSpend.filter((b) => b.branchId === profile.branchId),
+      wallet:
+        role === 'branch_viewer' || role === 'branch_operations' || role === 'branch_finance' || role === 'branch_admin'
+          ? {
+              ...base.wallet,
+              availableBalance:
+                MOCK_BRANCH_WALLET_OVERVIEW.find((b) => b.branchId === profile.branchId)?.allocatedBalance ??
+                0,
+              balance:
+                MOCK_BRANCH_WALLET_OVERVIEW.find((b) => b.branchId === profile.branchId)?.allocatedBalance ??
+                0,
+            }
+          : base.wallet,
     };
   }
-  if (role === 'finance_manager') {
-    return { ...base, user: MOCK_FINANCE_MANAGER };
-  }
-  if (role === 'viewer') {
-    return { ...base, user: MOCK_VIEWER };
-  }
-  return base;
+
+  return { ...base, user: profile };
 }
 
 export function getMockTransactionsForRole(role: BusinessRole): BusinessTransactionPreview[] {
-  if (role === 'operations_officer') {
-    return MOCK_TRANSACTIONS.filter((t) => t.branchName === MOCK_OPS_OFFICER.branchName);
+  const profile = DEMO_ROLE_PROFILES[role];
+  if (isBranchScopedRole(role) && profile.branchName) {
+    return MOCK_TRANSACTIONS.filter((t) => t.branchName === profile.branchName);
   }
   return MOCK_TRANSACTIONS;
 }
 
 export function getMockBranchesForRole(role: BusinessRole): BusinessBranch[] {
-  if (role === 'operations_officer') {
-    return MOCK_BRANCHES.filter((b) => b.id === MOCK_OPS_OFFICER.branchId);
+  const profile = DEMO_ROLE_PROFILES[role];
+  if (isBranchScopedRole(role) && profile.branchId) {
+    return MOCK_BRANCHES.filter((b) => b.id === profile.branchId);
   }
   return MOCK_BRANCHES;
 }
 
+/** Operating locations only — Head Office is company HQ, not a branch. */
+export function getOperatingBranchesForRole(role: BusinessRole): BusinessBranch[] {
+  return getMockBranchesForRole(role).filter((branch) => !branch.isHeadOffice);
+}
+
 export function getMockTeamForRole(role: BusinessRole): BusinessTeamMember[] {
-  if (role === 'operations_officer') {
-    return MOCK_TEAM.filter((m) => m.branchId === MOCK_OPS_OFFICER.branchId || m.role === 'super_admin');
+  const profile = DEMO_ROLE_PROFILES[role];
+
+  if (role === 'super_admin') {
+    return MOCK_TEAM;
   }
-  return MOCK_TEAM;
+
+  if (isBranchScopedRole(role) && profile.branchId) {
+    return MOCK_TEAM.filter((m) => m.branchId === profile.branchId);
+  }
+
+  // HQ non-admin roles: Head Office roster only
+  return MOCK_TEAM.filter((m) => m.branchId === HEAD_OFFICE_BRANCH_ID);
 }
 
 export function getMockBeneficiariesForRole(role: BusinessRole): BusinessBeneficiary[] {
-  if (role === 'operations_officer') {
-    return MOCK_BENEFICIARIES.filter((b) => b.branchName === MOCK_OPS_OFFICER.branchName);
+  const profile = DEMO_ROLE_PROFILES[role];
+  if (isBranchScopedRole(role) && profile.branchName) {
+    return MOCK_BENEFICIARIES.filter((b) => b.branchName === profile.branchName);
   }
   return MOCK_BENEFICIARIES;
 }
 
+export function getMockBeneficiaryGroupsForRole(role: BusinessRole): BeneficiaryGroup[] {
+  const profile = DEMO_ROLE_PROFILES[role];
+  if (isBranchScopedRole(role) && profile.branchName) {
+    return MOCK_BENEFICIARY_GROUPS.filter((group) => group.branchName === profile.branchName);
+  }
+  return MOCK_BENEFICIARY_GROUPS;
+}
+
+/** All phone groups — usable for airtime or data bulk (service picks the pay type). */
+export function getBeneficiaryGroupsForBulk(
+  role: BusinessRole,
+  _service?: 'airtime' | 'data',
+): BeneficiaryGroup[] {
+  return getMockBeneficiaryGroupsForRole(role);
+}
+
+export function getBeneficiaryGroupById(
+  role: BusinessRole,
+  groupId: string,
+): BeneficiaryGroup | undefined {
+  return getMockBeneficiaryGroupsForRole(role).find((group) => group.id === groupId);
+}
+
 export function getMockBranchWalletOverviewForRole(role: BusinessRole): BranchWalletOverview[] {
-  if (role === 'operations_officer') {
-    return MOCK_BRANCH_WALLET_OVERVIEW.filter((b) => b.branchId === MOCK_OPS_OFFICER.branchId);
-  }
-  if (role === 'viewer' && MOCK_VIEWER.branchId) {
-    return MOCK_BRANCH_WALLET_OVERVIEW.filter((b) => b.branchId === MOCK_VIEWER.branchId);
-  }
-  if (role === 'super_admin' || role === 'finance_manager') {
-    return MOCK_BRANCH_WALLET_OVERVIEW;
+  const profile = DEMO_ROLE_PROFILES[role];
+  if (isBranchScopedRole(role) && profile.branchId) {
+    return MOCK_BRANCH_WALLET_OVERVIEW.filter((b) => b.branchId === profile.branchId);
   }
   return MOCK_BRANCH_WALLET_OVERVIEW;
 }
 
+export function canViewAllBranchWalletInfo(role: BusinessRole): boolean {
+  return canViewCompanyWallet(role);
+}
+
+/** Branches that can receive allocations from Head Office (excludes HQ). */
+export function getAllocatableBranchesForRole(role: BusinessRole): BranchWalletOverview[] {
+  if (!canViewCompanyWallet(role)) return [];
+  return MOCK_BRANCH_WALLET_OVERVIEW.filter((branch) => branch.branchId !== HEAD_OFFICE_BRANCH_ID);
+}
+
+export function getHeadOfficeCompanyBalance(): number {
+  return MOCK_DASHBOARD.wallet.availableBalance;
+}
+
+/** Head Office company-wallet scope for wallet overview (not an allocated branch pot). */
+export function getHeadOfficeWalletScope(): BranchWalletOverview {
+  const hqTransactions = MOCK_TRANSACTIONS.filter((tx) => tx.branchName === 'Head Office');
+  return {
+    branchId: HEAD_OFFICE_BRANCH_ID,
+    branchName: 'Head Office',
+    allocatedBalance: getHeadOfficeCompanyBalance(),
+    todaySpend: MOCK_DASHBOARD.wallet.todaySpend,
+    monthSpend: MOCK_DASHBOARD.wallet.monthSpend,
+    monthTransactions: hqTransactions.length,
+  };
+}
+
+/**
+ * Wallet page scopes: Head Office (company wallet) first for HQ roles,
+ * then allocated branch wallets. Branch roles only see their branch.
+ */
+export function getWalletScopeOptionsForRole(role: BusinessRole): BranchWalletOverview[] {
+  const branches = getMockBranchWalletOverviewForRole(role);
+  if (!canViewCompanyWallet(role)) {
+    return branches;
+  }
+  return [getHeadOfficeWalletScope(), ...branches];
+}
+
+export function isHeadOfficeWalletScope(branchId: string | null | undefined): boolean {
+  return branchId === HEAD_OFFICE_BRANCH_ID;
+}
+
+/** Sum of funds already sent to operating branches (Head Office is not included). */
 export function getTotalAllocatedBalance(): number {
   return MOCK_BRANCH_WALLET_OVERVIEW.reduce((sum, b) => sum + b.allocatedBalance, 0);
 }
 
+/** Company wallet remaining at Head Office — what can still be allocated out. */
 export function getUnallocatedCompanyBalance(): number {
-  return MOCK_DASHBOARD.wallet.availableBalance - getTotalAllocatedBalance();
+  return MOCK_DASHBOARD.wallet.availableBalance;
+}
+
+export function getTotalCompanyFunds(): number {
+  return getHeadOfficeCompanyBalance() + getTotalAllocatedBalance();
 }
 
 export function getMockWalletStatementsForRole(role: BusinessRole): WalletStatementRow[] {
-  if (role === 'operations_officer') {
-    return MOCK_WALLET_STATEMENTS.filter(
-      (row) => row.branchName === MOCK_OPS_OFFICER.branchName,
-    );
+  const profile = DEMO_ROLE_PROFILES[role];
+  if (isBranchScopedRole(role) && profile.branchName) {
+    return MOCK_WALLET_STATEMENTS.filter((row) => row.branchName === profile.branchName);
   }
   return MOCK_WALLET_STATEMENTS;
 }
@@ -782,6 +1256,7 @@ export function getMockWalletStatementsForRole(role: BusinessRole): WalletStatem
 export function getMockStatementBranchFilterOptions(role: BusinessRole): string[] {
   const statements = getMockWalletStatementsForRole(role);
   const branchNames = new Set<string>();
+  const profile = DEMO_ROLE_PROFILES[role];
 
   for (const row of statements) {
     if (row.branchName) {
@@ -790,32 +1265,31 @@ export function getMockStatementBranchFilterOptions(role: BusinessRole): string[
   }
 
   for (const branch of MOCK_BRANCH_WALLET_OVERVIEW) {
-    if (role !== 'operations_officer' || branch.branchId === MOCK_OPS_OFFICER.branchId) {
+    if (!isBranchScopedRole(role) || branch.branchId === profile.branchId) {
       branchNames.add(branch.branchName);
     }
   }
 
-  return Array.from(branchNames).sort((a, b) => a.localeCompare(b));
-}
+  if (canViewCompanyWallet(role)) {
+    branchNames.add('Head Office');
+  }
 
-export function canViewAllBranchWalletInfo(role: BusinessRole): boolean {
-  return role === 'super_admin' || role === 'finance_manager';
+  return Array.from(branchNames).sort((a, b) => a.localeCompare(b));
 }
 
 export function getWalletBalanceDisplayForRole(role: BusinessRole): {
   label: string;
   balance: number;
 } {
-  if (canViewAllBranchWalletInfo(role)) {
+  if (canViewCompanyWallet(role)) {
     return {
-      label: 'Company wallet balance',
+      label: 'Company wallet (Head Office)',
       balance: MOCK_DASHBOARD.wallet.availableBalance,
     };
   }
 
-  const branchId =
-    role === 'operations_officer' ? MOCK_OPS_OFFICER.branchId : MOCK_VIEWER.branchId;
-  const branch = MOCK_BRANCH_WALLET_OVERVIEW.find((b) => b.branchId === branchId);
+  const profile = DEMO_ROLE_PROFILES[role];
+  const branch = MOCK_BRANCH_WALLET_OVERVIEW.find((b) => b.branchId === profile.branchId);
 
   return {
     label: 'Branch wallet balance',

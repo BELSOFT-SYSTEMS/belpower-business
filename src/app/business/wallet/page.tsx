@@ -1,16 +1,19 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Download, ArrowRightLeft, Wallet } from 'lucide-react';
 import { BusinessSelect } from '@/components/business/BusinessSelect';
 import { BusinessTransactionList } from '@/components/business/BusinessTransactionList';
 import { useBusinessAuth } from '@/context/BusinessAuthContext';
 import {
-  getMockBranchWalletOverviewForRole,
+  HEAD_OFFICE_BRANCH_ID,
+  canViewAllBranchWalletInfo,
   getMockDashboardForRole,
   getMockTransactionsForRole,
-  canViewAllBranchWalletInfo,
+  getTotalAllocatedBalance,
+  getWalletScopeOptionsForRole,
+  isHeadOfficeWalletScope,
 } from '@/data/businessMocks';
 import { formatPrice } from '@/utils/formatPrice';
 
@@ -19,42 +22,67 @@ export default function WalletPage() {
   const role = user?.role ?? demoRole;
   const dashboard = getMockDashboardForRole(role);
   const { wallet } = dashboard;
-  const branchOptions = getMockBranchWalletOverviewForRole(role);
+  const scopeOptions = useMemo(() => getWalletScopeOptionsForRole(role), [role]);
   const allTransactions = getMockTransactionsForRole(role);
+  const canViewCompanyWallet = canViewAllBranchWalletInfo(role);
+  const previousRoleRef = useRef(role);
 
-  const defaultBranchId = user?.branchId ?? branchOptions[0]?.branchId ?? '';
-  const [selectedBranchId, setSelectedBranchId] = useState(defaultBranchId);
-
-  useEffect(() => {
-    const valid = branchOptions.some((b) => b.branchId === selectedBranchId);
-    if (!valid) {
-      setSelectedBranchId(branchOptions[0]?.branchId ?? '');
-    }
-  }, [branchOptions, selectedBranchId]);
-
-  const selectedBranch = useMemo(
-    () => branchOptions.find((b) => b.branchId === selectedBranchId) ?? branchOptions[0],
-    [branchOptions, selectedBranchId]
+  const [selectedScopeId, setSelectedScopeId] = useState(() =>
+    canViewAllBranchWalletInfo(role)
+      ? HEAD_OFFICE_BRANCH_ID
+      : (user?.branchId ?? scopeOptions[0]?.branchId ?? ''),
   );
 
-  const canViewCompanyWallet = canViewAllBranchWalletInfo(role);
+  useEffect(() => {
+    const roleChanged = previousRoleRef.current !== role;
+    previousRoleRef.current = role;
 
-  const balanceLabel = canViewCompanyWallet ? 'Company wallet balance' : 'Branch wallet balance';
-  const balanceAmount = canViewCompanyWallet
-    ? wallet.availableBalance
-    : (selectedBranch?.allocatedBalance ?? 0);
-  const balanceSubtitle = canViewCompanyWallet
-    ? selectedBranch
-      ? `${selectedBranch.branchName} allocation: ${formatPrice(selectedBranch.allocatedBalance)}`
-      : 'Shared pool — allocate to branches'
-    : `Allocated to ${selectedBranch?.branchName ?? 'your branch'}`;
+    if (roleChanged) {
+      if (canViewCompanyWallet) {
+        setSelectedScopeId(HEAD_OFFICE_BRANCH_ID);
+        return;
+      }
+      setSelectedScopeId(user?.branchId ?? scopeOptions[0]?.branchId ?? '');
+      return;
+    }
 
-  const branchActivity = useMemo(() => {
-    if (!selectedBranch) return [];
+    const stillValid = scopeOptions.some((scope) => scope.branchId === selectedScopeId);
+    if (!stillValid) {
+      setSelectedScopeId(
+        canViewCompanyWallet
+          ? HEAD_OFFICE_BRANCH_ID
+          : (user?.branchId ?? scopeOptions[0]?.branchId ?? ''),
+      );
+    }
+  }, [canViewCompanyWallet, role, scopeOptions, selectedScopeId, user?.branchId]);
+
+  const selectedScope = useMemo(
+    () => scopeOptions.find((scope) => scope.branchId === selectedScopeId) ?? scopeOptions[0],
+    [scopeOptions, selectedScopeId],
+  );
+
+  const viewingHeadOffice = isHeadOfficeWalletScope(selectedScope?.branchId);
+
+  const balanceLabel = viewingHeadOffice
+    ? 'Company wallet (Head Office)'
+    : canViewCompanyWallet
+      ? `${selectedScope?.branchName ?? 'Branch'} allocation`
+      : 'Branch wallet balance';
+
+  const balanceAmount = selectedScope?.allocatedBalance ?? 0;
+
+  const balanceSubtitle = viewingHeadOffice
+    ? `Held at Head Office · ${formatPrice(getTotalAllocatedBalance())} already allocated to branches`
+    : canViewCompanyWallet
+      ? 'Allocated from the Head Office company wallet'
+      : `Allocated to ${selectedScope?.branchName ?? 'your branch'}`;
+
+  const scopeActivity = useMemo(() => {
+    if (!selectedScope) return [];
     return allTransactions
-      .filter((tx) => tx.branchName === selectedBranch.branchName)
+      .filter((tx) => tx.branchName === selectedScope.branchName)
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  }, [allTransactions, selectedBranch]);
+  }, [allTransactions, selectedScope]);
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -62,22 +90,27 @@ export default function WalletPage() {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <h1 className="text-2xl font-semibold text-gray-900">Wallet</h1>
           <BusinessSelect
-            value={selectedBranchId}
-            onChange={setSelectedBranchId}
-            disabled={branchOptions.length <= 1}
+            value={selectedScope?.branchId ?? selectedScopeId}
+            onChange={setSelectedScopeId}
+            disabled={scopeOptions.length <= 1}
             fitContent
-            aria-label="Select branch"
-            options={branchOptions.map((branch) => ({
-              value: branch.branchId,
-              label: canViewCompanyWallet
-                ? `${branch.branchName} · ${formatPrice(branch.allocatedBalance)}`
-                : branch.branchName,
+            aria-label="Select wallet scope"
+            options={scopeOptions.map((scope) => ({
+              value: scope.branchId,
+              label: isHeadOfficeWalletScope(scope.branchId)
+                ? `Head Office · ${formatPrice(scope.allocatedBalance)} (company)`
+                : canViewCompanyWallet
+                  ? `${scope.branchName} · ${formatPrice(scope.allocatedBalance)}`
+                  : scope.branchName,
             }))}
           />
         </div>
         <p className="mt-2 text-sm text-gray-600">
           Wallet stats and activity for{' '}
-          <span className="font-medium text-gray-900">{selectedBranch?.branchName ?? 'selected branch'}</span>.
+          <span className="font-medium text-gray-900">
+            {selectedScope?.branchName ?? 'selected location'}
+          </span>
+          {viewingHeadOffice ? ' (company wallet)' : ''}.
         </p>
       </div>
 
@@ -93,25 +126,25 @@ export default function WalletPage() {
         <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
           <p className="text-sm text-gray-500">Today&apos;s spend</p>
           <p className="mt-1 text-xl font-semibold text-gray-900">
-            {formatPrice(selectedBranch?.todaySpend ?? 0)}
+            {formatPrice(selectedScope?.todaySpend ?? 0)}
           </p>
         </div>
         <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
           <p className="text-sm text-gray-500">This month</p>
           <p className="mt-1 text-xl font-semibold text-gray-900">
-            {formatPrice(selectedBranch?.monthSpend ?? 0)}
+            {formatPrice(selectedScope?.monthSpend ?? 0)}
           </p>
         </div>
         <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
           <p className="text-sm text-gray-500">Transactions this month</p>
           <p className="mt-1 text-xl font-semibold text-gray-900">
-            {selectedBranch?.monthTransactions ?? 0}
+            {selectedScope?.monthTransactions ?? 0}
           </p>
         </div>
       </div>
 
       <div className="flex flex-wrap gap-3">
-        {canAccess('wallet.fund') && (
+        {canAccess('wallet.fund') && viewingHeadOffice && (
           <Link
             href="/business/wallet/fund"
             className="inline-flex items-center gap-2 rounded-xl bg-blue-normal px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-normal-hover"
@@ -120,7 +153,7 @@ export default function WalletPage() {
             Fund wallet
           </Link>
         )}
-        {canAccess('wallet.allocate') && (
+        {canAccess('wallet.allocate') && viewingHeadOffice && (
           <Link
             href="/business/wallet/allocate"
             className="inline-flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-light/40 px-4 py-2.5 text-sm font-semibold text-blue-normal hover:bg-blue-light/60"
@@ -142,14 +175,16 @@ export default function WalletPage() {
 
       <section className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-gray-900">Recent activity</h2>
+          <h2 className="text-lg font-semibold text-gray-900">
+            {viewingHeadOffice ? 'Head Office activity' : 'Recent activity'}
+          </h2>
           <Link href="/business/transactions" className="text-sm font-medium text-blue-normal hover:underline">
             View all
           </Link>
         </div>
         <BusinessTransactionList
-          transactions={branchActivity}
-          emptyMessage={`No recent activity for ${selectedBranch?.branchName ?? 'this branch'}.`}
+          transactions={scopeActivity}
+          emptyMessage={`No recent activity for ${selectedScope?.branchName ?? 'this location'}.`}
         />
       </section>
     </div>

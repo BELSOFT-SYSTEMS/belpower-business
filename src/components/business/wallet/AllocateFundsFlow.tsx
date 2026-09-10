@@ -8,9 +8,10 @@ import { BusinessSelect } from '@/components/business/BusinessSelect';
 import { PageHeader } from '@/components/business/PageHeader';
 import { useBusinessAuth } from '@/context/BusinessAuthContext';
 import {
-  getMockBranchWalletOverviewForRole,
-  getMockDashboardForRole,
+  getAllocatableBranchesForRole,
+  getHeadOfficeCompanyBalance,
   getTotalAllocatedBalance,
+  getTotalCompanyFunds,
   getUnallocatedCompanyBalance,
 } from '@/data/businessMocks';
 import {
@@ -29,10 +30,11 @@ function parseAmount(value: string): number {
 export function AllocateFundsFlow() {
   const { user, demoRole } = useBusinessAuth();
   const role = user?.role ?? demoRole;
-  const dashboard = getMockDashboardForRole(role);
-  const branches = getMockBranchWalletOverviewForRole(role);
+  const branches = getAllocatableBranchesForRole(role);
+  const companyAtHq = getHeadOfficeCompanyBalance();
   const unallocated = getUnallocatedCompanyBalance();
   const totalAllocated = getTotalAllocatedBalance();
+  const totalFunds = getTotalCompanyFunds();
 
   const [view, setView] = useState<FlowView>('form');
   const [branchId, setBranchId] = useState(branches[0]?.branchId ?? '');
@@ -104,11 +106,11 @@ export function AllocateFundsFlow() {
 
   if (view === 'success' && lastAllocation) {
     return (
-      <div className="mx-auto max-w-3xl space-y-6">
+      <div className="mx-auto max-w-6xl space-y-6">
         <PageHeader
           title="Allocate funds"
-          description="Move money from the company wallet into branch allocations."
-        />
+        description="Move money from the Head Office company wallet into branch allocations."
+      />
         <section className="rounded-xl border border-green-200 bg-green-50 p-8 text-center">
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full border-2 border-green-200 bg-white">
             <Check className="h-8 w-8 text-green-600" />
@@ -141,11 +143,11 @@ export function AllocateFundsFlow() {
 
   if (view === 'failed') {
     return (
-      <div className="mx-auto max-w-3xl space-y-6">
+      <div className="mx-auto max-w-6xl space-y-6">
         <PageHeader
           title="Allocate funds"
-          description="Move money from the company wallet into branch allocations."
-        />
+        description="Move money from the Head Office company wallet into branch allocations."
+      />
         <section className="rounded-xl border border-gray-200 bg-white p-8 text-center shadow-sm">
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full border-2 border-red-200 bg-white">
             <XCircle className="h-8 w-8 text-red-600" />
@@ -167,26 +169,31 @@ export function AllocateFundsFlow() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
+    <div className="mx-auto max-w-6xl space-y-6">
       <PageHeader
         title="Allocate funds"
-        description="Move money from the company wallet into branch allocations. Branches spend from their allocated balance."
+        description="Move money from the Head Office company wallet into branch allocations. Branches spend from their allocated balance."
       />
 
       <div className="grid gap-4 sm:grid-cols-3">
         <div className="rounded-xl border border-green-200 bg-white p-4 shadow-sm">
-          <p className="text-sm text-gray-500">Company wallet</p>
+          <p className="text-sm text-gray-500">Company wallet (Head Office)</p>
           <p className="mt-1 text-xl font-semibold text-gray-900">
-            {formatPrice(dashboard.wallet.availableBalance)}
+            {formatPrice(companyAtHq)}
+          </p>
+          <p className="mt-1 text-xs text-gray-500">
+            Total company funds {formatPrice(totalFunds)}
           </p>
         </div>
         <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
           <p className="text-sm text-gray-500">Total allocated</p>
           <p className="mt-1 text-xl font-semibold text-gray-900">{formatPrice(totalAllocated)}</p>
+          <p className="mt-1 text-xs text-gray-500">Sent to branches (excludes HQ)</p>
         </div>
         <div className="rounded-xl border border-blue-200 bg-white p-4 shadow-sm">
           <p className="text-sm text-gray-500">Available to allocate</p>
           <p className="mt-1 text-xl font-semibold text-gray-900">{formatPrice(unallocated)}</p>
+          <p className="mt-1 text-xs text-gray-500">Still at Head Office</p>
         </div>
       </div>
 
@@ -206,11 +213,15 @@ export function AllocateFundsFlow() {
             onChange={setBranchId}
             className="mt-1.5"
             disabled={isSubmitting}
+            placeholder="Select a branch"
             options={branches.map((branch) => ({
               value: branch.branchId,
               label: `${branch.branchName} — current ${formatPrice(branch.allocatedBalance)}`,
             }))}
           />
+          <p className="mt-2 text-xs text-gray-500">
+            Head Office holds the company wallet and is not an allocation target.
+          </p>
         </div>
 
         <div>

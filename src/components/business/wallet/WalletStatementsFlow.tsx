@@ -10,6 +10,7 @@ import { EmptyState } from '@/components/business/EmptyState';
 import { PageHeader } from '@/components/business/PageHeader';
 import { StatusBadge } from '@/components/business/StatusBadge';
 import { useBusinessAuth } from '@/context/BusinessAuthContext';
+import { isBranchScopedRole } from '@/constants/businessRoles';
 import {
   getMockBranchWalletOverviewForRole,
   getMockDashboardForRole,
@@ -48,7 +49,7 @@ export function WalletStatementsFlow() {
   const [dateFilter, setDateFilter] = useState<string | null>(null);
 
   const canExport = canAccess('transactions.export');
-  const isOpsOfficer = role === 'operations_officer';
+  const isBranchUser = isBranchScopedRole(role);
 
   const filteredStatements = useMemo(() => {
     return allStatements
@@ -153,7 +154,7 @@ export function WalletStatementsFlow() {
             id="statement-branch-filter"
             value={branchFilter}
             onChange={setBranchFilter}
-            disabled={isOpsOfficer && branchOptions.length <= 1}
+            disabled={isBranchUser && branchOptions.length <= 1}
             aria-label="Filter by branch"
             options={branchSelectOptions}
           />
