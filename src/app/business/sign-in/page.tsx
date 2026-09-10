@@ -5,12 +5,14 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { useBusinessAuth } from '@/context/BusinessAuthContext';
 import { PasswordInput } from '@/components/business/PasswordInput';
+import { BusinessApiError } from '@/lib/businessApi';
 
 export default function BusinessSignInPage() {
   const router = useRouter();
-  const { signInMock, isAuthenticated, isLoading } = useBusinessAuth();
+  const { login, isAuthenticated, isLoading } = useBusinessAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -21,15 +23,25 @@ export default function BusinessSignInPage() {
     }
   }, [isLoading, isAuthenticated, router]);
 
-  const handleSubmit = (event: React.FormEvent) => {
+  const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setSubmitting(true);
-    signInMock('super_admin');
-
-    const params = new URLSearchParams(window.location.search);
-    const from = params.get('from') || '/business';
-    router.push(from); 
-    setSubmitting(false);
+    try {
+      await login(email.trim(), password);
+      const params = new URLSearchParams(window.location.search);
+      const from = params.get('from') || '/business';
+      router.push(from);
+    } catch (error) {
+      const message =
+        error instanceof BusinessApiError
+          ? error.message
+          : error instanceof Error
+            ? error.message
+            : 'Sign in failed';
+      toast.error(message);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   if (isLoading) {
@@ -134,10 +146,6 @@ export default function BusinessSignInPage() {
             >
               {submitting ? 'Signing in…' : 'Sign in'}
             </button>
-
-            <p className="text-center text-xs text-gray-500">
-              Mock sign-in — any email and password signs in as Super Admin until the API is connected.
-            </p>
           </form>
 
           <p className="mt-6 text-center text-sm text-gray-500">

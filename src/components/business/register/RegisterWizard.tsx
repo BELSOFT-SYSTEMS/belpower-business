@@ -11,16 +11,13 @@ import { PasswordInput } from '@/components/business/PasswordInput';
 import { getElectricityProviderOptions } from '@/constants/discoNames';
 import { isBusinessPasswordValid, validateBusinessPassword } from '@/constants/passwordPolicy';
 import {
-  DEMO_EMAIL_OTP,
   isMeterNumberLongEnough,
   METER_MIN_LENGTH,
-  mockSendEmailOtp,
-  mockVerifyEmailOtp,
-  mockVerifyMeter,
   normalizeMeterNumber,
 } from '@/data/mockRegisterFlow';
 import { useBusinessAuth } from '@/context/BusinessAuthContext';
 import { BusinessSelect } from '@/components/business/BusinessSelect';
+import { businessAuthApi, BusinessApiError } from '@/lib/businessApi';
 import { cn } from '@/lib/utils';
 
 const STEPS = [
@@ -36,13 +33,25 @@ const electricityProviders = getElectricityProviderOptions();
 const inputClassName =
   'w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-blue-normal focus:ring-2 focus:ring-blue-normal/20';
 
+const NIGERIAN_PHONE_REGEX = /^0[7-9]\d{9}$/;
+
+function isValidNigerianPhone(value: string): boolean {
+  return NIGERIAN_PHONE_REGEX.test(value);
+}
+
+function apiErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof BusinessApiError) return error.message;
+  if (error instanceof Error) return error.message;
+  return fallback;
+}
+
 type RegisterWizardProps = {
   onComplete?: () => void;
 };
 
 export function RegisterWizard({ onComplete }: RegisterWizardProps) {
   const router = useRouter();
-  const { signInMock } = useBusinessAuth();
+  const { applyAuthSession } = useBusinessAuth();
   const [step, setStep] = useState(1);
   const [submitting, setSubmitting] = useState(false);
 
@@ -66,6 +75,14 @@ export function RegisterWizard({ onComplete }: RegisterWizardProps) {
   const [emailOtpError, setEmailOtpError] = useState<string | null>(null);
   const lastOtpEmailRef = useRef('');
 
+  const [phoneOtpSent, setPhoneOtpSent] = useState(false);
+  const [phoneOtpSending, setPhoneOtpSending] = useState(false);
+  const [phoneOtpVerifying, setPhoneOtpVerifying] = useState(false);
+  const [phoneVerified, setPhoneVerified] = useState(false);
+  const [phoneOtp, setPhoneOtp] = useState('');
+  const [phoneOtpError, setPhoneOtpError] = useState<string | null>(null);
+  const lastOtpPhoneRef = useRef('');
+
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
 
@@ -77,6 +94,8 @@ export function RegisterWizard({ onComplete }: RegisterWizardProps) {
   const meterVerifyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const emailOtpSendTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const emailOtpVerifyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const phoneOtpSendTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const phoneOtpVerifyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const passwordMismatch = useMemo(() => {
     if (confirmPassword && password !== confirmPassword) {
@@ -96,15 +115,23 @@ export function RegisterWizard({ onComplete }: RegisterWizardProps) {
       setMeterVerified(false);
 
       try {
-        const result = await mockVerifyMeter(number, selectedDisco, selectedType);
+        const result = await businessAuthApi.verifyMeter({
+          meter: number,
+          disco: selectedDisco,
+          vendType: selectedType,
+        });
+        const meterData = result.data;
+        const customerName = meterData?.customer_name || meterData?.name || '';
+        const customerAddress = meterData?.address || meterData?.CustomerAddress || '';
+
+        setVerificationId(result.verification_id);
+        setAddress(customerAddress);
+        setBusinessName((current) => current.trim() || customerName);
         setMeterVerified(true);
-        setVerificationId(result.verificationId);
-        setAddress(result.address);
-        setBusinessName((current) => current.trim() || result.customerName);
-        toast.success('Meter verified (demo).');
+        toast.success('Meter verified.');
       } catch (error) {
         setMeterVerified(false);
-        setMeterError(error instanceof Error ? error.message : 'Meter verification failed.');
+        setMeterError(apiErrorMessage(error, 'Meter verification failed.'));
       } finally {
         setMeterVerifying(false);
       }
@@ -148,15 +175,18 @@ export function RegisterWizard({ onComplete }: RegisterWizardProps) {
     setEmailOtpError(null);
 
     try {
-      await mockSendEmailOtp(email);
+      const result = await businessAuthApi.sendEmailOtp(email);
       setEmailOtpSent(true);
       setEmailVerified(false);
       setEmailOtp('');
       lastOtpEmailRef.current = email;
-      toast.success(`OTP sent (demo). Use ${DEMO_EMAIL_OTP}.`);
+      toast.success(
+        result.otp ? `OTP sent. Development code: ${result.otp}` : 'OTP sent to your email.',
+      );
     } catch (error) {
       setEmailOtpSent(false);
-      setEmailOtpError(error instanceof Error ? error.message : 'Could not send OTP.');
+      setEmailOtpError(apiErrorMessage(error, 'Could not send OTP.'));
+      toast.error(apiErrorMessage(error, 'Could not send OTP.'));
     } finally {
       setEmailOtpSending(false);
     }
@@ -205,12 +235,12 @@ export function RegisterWizard({ onComplete }: RegisterWizardProps) {
       setEmailOtpError(null);
 
       try {
-        await mockVerifyEmailOtp(businessEmail.trim(), emailOtp);
+        await businessAuthApi.verifyEmailOtp(businessEmail.trim(), emailOtp);
         setEmailVerified(true);
         toast.success('Business email verified.');
       } catch (error) {
         setEmailVerified(false);
-        setEmailOtpError(error instanceof Error ? error.message : 'Invalid OTP.');
+        setEmailOtpError(apiErrorMessage(error, 'Invalid OTP.'));
         setEmailOtp('');
       } finally {
         setEmailOtpVerifying(false);
@@ -224,6 +254,98 @@ export function RegisterWizard({ onComplete }: RegisterWizardProps) {
     };
   }, [businessEmail, emailOtp, emailVerified, emailOtpVerifying]);
 
+  const sendPhoneOtp = useCallback(async (phoneNumber: string) => {
+    if (!isValidNigerianPhone(phoneNumber)) {
+      return;
+    }
+
+    setPhoneOtpSending(true);
+    setPhoneOtpError(null);
+
+    try {
+      const result = await businessAuthApi.sendPhoneOtp(phoneNumber);
+      setPhoneOtpSent(true);
+      setPhoneVerified(false);
+      setPhoneOtp('');
+      lastOtpPhoneRef.current = phoneNumber;
+      toast.success(
+        result.otp ? `OTP sent. Development code: ${result.otp}` : 'OTP sent to your phone.',
+      );
+    } catch (error) {
+      setPhoneOtpSent(false);
+      setPhoneOtpError(apiErrorMessage(error, 'Could not send OTP.'));
+      toast.error(apiErrorMessage(error, 'Could not send OTP.'));
+    } finally {
+      setPhoneOtpSending(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (phoneOtpSendTimeoutRef.current) {
+      clearTimeout(phoneOtpSendTimeoutRef.current);
+    }
+
+    if (!phone.trim()) {
+      setPhoneOtpSent(false);
+      setPhoneVerified(false);
+      setPhoneOtp('');
+      lastOtpPhoneRef.current = '';
+      return;
+    }
+
+    if (phone !== lastOtpPhoneRef.current) {
+      setPhoneVerified(false);
+      setPhoneOtp('');
+    }
+
+    if (!isValidNigerianPhone(phone)) {
+      return;
+    }
+
+    phoneOtpSendTimeoutRef.current = setTimeout(() => {
+      sendPhoneOtp(phone);
+    }, 800);
+
+    return () => {
+      if (phoneOtpSendTimeoutRef.current) {
+        clearTimeout(phoneOtpSendTimeoutRef.current);
+      }
+    };
+  }, [phone, sendPhoneOtp]);
+
+  useEffect(() => {
+    if (phoneOtpVerifyTimeoutRef.current) {
+      clearTimeout(phoneOtpVerifyTimeoutRef.current);
+    }
+
+    if (phoneOtp.length !== 6 || phoneVerified || phoneOtpVerifying) {
+      return;
+    }
+
+    phoneOtpVerifyTimeoutRef.current = setTimeout(async () => {
+      setPhoneOtpVerifying(true);
+      setPhoneOtpError(null);
+
+      try {
+        await businessAuthApi.verifyPhoneOtp(phone, phoneOtp);
+        setPhoneVerified(true);
+        toast.success('Business phone verified.');
+      } catch (error) {
+        setPhoneVerified(false);
+        setPhoneOtpError(apiErrorMessage(error, 'Invalid OTP.'));
+        setPhoneOtp('');
+      } finally {
+        setPhoneOtpVerifying(false);
+      }
+    }, 300);
+
+    return () => {
+      if (phoneOtpVerifyTimeoutRef.current) {
+        clearTimeout(phoneOtpVerifyTimeoutRef.current);
+      }
+    };
+  }, [phone, phoneOtp, phoneVerified, phoneOtpVerifying]);
+
   const canContinueStep1 =
     meterVerified &&
     disco &&
@@ -235,7 +357,8 @@ export function RegisterWizard({ onComplete }: RegisterWizardProps) {
     businessName.trim().length >= 2 &&
     businessEmail.trim().length > 0 &&
     emailVerified &&
-    phone.trim().length >= 10 &&
+    phoneVerified &&
+    isValidNigerianPhone(phone) &&
     address.trim().length >= 5;
 
   const canContinueStep3 = firstName.trim().length >= 2 && lastName.trim().length >= 2;
@@ -257,11 +380,27 @@ export function RegisterWizard({ onComplete }: RegisterWizardProps) {
     }
 
     setSubmitting(true);
-    toast.success('Business registered (demo). You are now Super Admin at Head Office.');
-    signInMock('super_admin');
-    onComplete?.();
-    router.push('/business');
-    setSubmitting(false);
+    try {
+      const session = await businessAuthApi.register({
+        verificationId,
+        businessName: businessName.trim(),
+        email: businessEmail.trim(),
+        phone,
+        address: address.trim(),
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        password,
+        termsAccepted: true,
+      });
+      applyAuthSession(session);
+      toast.success('Business registered. You are now Super Admin at Head Office.');
+      onComplete?.();
+      router.push('/business');
+    } catch (error) {
+      toast.error(apiErrorMessage(error, 'Registration failed.'));
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const goNext = () => setStep((current) => Math.min(current + 1, STEPS.length));
@@ -393,7 +532,7 @@ export function RegisterWizard({ onComplete }: RegisterWizardProps) {
             <div>
               <h3 className="text-lg font-semibold text-gray-900">Business details</h3>
               <p className="mt-1 text-sm text-gray-600">
-                Verify your business email, then complete the remaining company information.
+                Verify your business email and phone, then complete the remaining company information.
               </p>
             </div>
 
@@ -443,7 +582,6 @@ export function RegisterWizard({ onComplete }: RegisterWizardProps) {
                     Verifying OTP…
                   </p>
                 ) : null}
-                <p className="mt-2 text-xs text-gray-500">Demo OTP: {DEMO_EMAIL_OTP}</p>
               </div>
             ) : null}
 
@@ -470,9 +608,44 @@ export function RegisterWizard({ onComplete }: RegisterWizardProps) {
                 value={phone}
                 onChange={(event) => setPhone(event.target.value.replace(/\D/g, '').slice(0, 11))}
                 placeholder="08012345678"
-                className={inputClassName}
+                className={cn(
+                  inputClassName,
+                  phoneVerified && 'border-green-400 focus:border-green-500 focus:ring-green-500/20',
+                )}
               />
+              <div className="mt-2 text-sm text-gray-500">
+                {phoneOtpSending ? (
+                  <span className="inline-flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin text-blue-normal" aria-hidden />
+                    Sending OTP…
+                  </span>
+                ) : phoneVerified ? (
+                  <span className="font-medium text-green-700">Phone verified</span>
+                ) : phoneOtpSent ? (
+                  <span>Enter the 6-digit code sent to your phone.</span>
+                ) : (
+                  <span>OTP will be sent when you enter a valid Nigerian phone number.</span>
+                )}
+              </div>
             </div>
+
+            {phoneOtpSent && !phoneVerified ? (
+              <div>
+                <label className="mb-2 block text-sm font-medium text-gray-700">Phone verification code</label>
+                <OtpInput
+                  value={phoneOtp}
+                  onChange={setPhoneOtp}
+                  error={phoneOtpError}
+                  disabled={phoneOtpVerifying}
+                />
+                {phoneOtpVerifying ? (
+                  <p className="mt-2 inline-flex items-center gap-2 text-sm text-gray-600">
+                    <Loader2 className="h-4 w-4 animate-spin text-blue-normal" aria-hidden />
+                    Verifying OTP…
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
 
             <div>
               <label htmlFor="address" className="mb-1.5 block text-sm font-medium text-gray-700">
@@ -652,10 +825,6 @@ export function RegisterWizard({ onComplete }: RegisterWizardProps) {
           </button>
         )}
       </div>
-
-      <p className="mt-4 text-center text-xs text-gray-500">
-        Demo mode — registration runs locally until the API is connected.
-      </p>
     </div>
   );
 }

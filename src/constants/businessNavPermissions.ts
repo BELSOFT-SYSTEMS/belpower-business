@@ -42,11 +42,12 @@ export const BUSINESS_NAV_ITEMS: BusinessNavItem[] = [
   { name: 'Transactions', href: '/business/transactions', permission: 'transactions.view' },
   { name: 'Analytics', href: '/business/analytics', permission: 'analytics.view' },
   { name: 'Team Management', href: '/business/team', permission: 'team.view' },
-  { name: 'Business Settings', href: '/business/settings', permission: 'business.settings.manage' },
+  { name: 'Business Settings', href: '/business/settings', permission: 'business.settings.view' },
 ];
 
 const HQ_FINANCE_PERMISSIONS = [
   'business.view',
+  'business.settings.view',
   'wallet.view',
   'wallet.fund',
   'wallet.allocate',
@@ -64,6 +65,7 @@ const HQ_FINANCE_PERMISSIONS = [
 
 const HQ_OPS_PERMISSIONS = [
   'business.view',
+  'business.settings.view',
   'wallet.view',
   'wallet.statements',
   'payments.single',
@@ -76,6 +78,7 @@ const HQ_OPS_PERMISSIONS = [
 
 const HQ_VIEWER_PERMISSIONS = [
   'business.view',
+  'business.settings.view',
   'wallet.view',
   'wallet.statements',
   'transactions.view',
@@ -87,6 +90,7 @@ const HQ_VIEWER_PERMISSIONS = [
 
 const BRANCH_ADMIN_PERMISSIONS = [
   'business.view',
+  'business.settings.view',
   'wallet.view',
   'wallet.statements',
   'payments.single',
@@ -104,6 +108,7 @@ const BRANCH_ADMIN_PERMISSIONS = [
 
 const BRANCH_FINANCE_PERMISSIONS = [
   'business.view',
+  'business.settings.view',
   'wallet.view',
   'wallet.statements',
   'payments.single',
@@ -117,6 +122,7 @@ const BRANCH_FINANCE_PERMISSIONS = [
 
 const BRANCH_OPS_PERMISSIONS = [
   'business.view',
+  'business.settings.view',
   'wallet.view',
   'payments.single',
   'payments.bulk',
@@ -128,6 +134,7 @@ const BRANCH_OPS_PERMISSIONS = [
 
 const BRANCH_VIEWER_PERMISSIONS = [
   'business.view',
+  'business.settings.view',
   'wallet.view',
   'transactions.view',
   'analytics.view',
@@ -138,6 +145,7 @@ const BRANCH_VIEWER_PERMISSIONS = [
 export const ROLE_PERMISSIONS: Record<BusinessRole, string[]> = {
   super_admin: [
     'business.view',
+    'business.settings.view',
     'business.settings.manage',
     'wallet.view',
     'wallet.fund',
@@ -198,7 +206,7 @@ export function getRequiredPermissionForRoute(pathname: string): string | null {
 
   const exact: Record<string, string> = {
     '/business': 'business.view',
-    '/business/settings': 'business.settings.manage',
+    '/business/settings': 'business.settings.view',
     '/business/wallet/fund': 'wallet.fund',
     '/business/wallet/allocate': 'wallet.allocate',
     '/business/wallet/statements': 'wallet.statements',

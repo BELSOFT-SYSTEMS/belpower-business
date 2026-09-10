@@ -9,6 +9,10 @@ import { PageHeader } from '@/components/business/PageHeader';
 import { OtpInput } from '@/components/business/register/OtpInput';
 import { useBusinessAuth } from '@/context/BusinessAuthContext';
 import { getMockDashboardForRole } from '@/data/businessMocks';
+import { PasswordFieldWithRequirements } from '@/components/business/PasswordFieldWithRequirements';
+import { PasswordInput } from '@/components/business/PasswordInput';
+import { isBusinessPasswordValid } from '@/constants/passwordPolicy';
+import { businessAuthApi, BusinessApiError } from '@/lib/businessApi';
 import {
   DEMO_EMAIL_OTP,
   DEMO_PHONE_OTP,
@@ -36,8 +40,9 @@ function formatDisplayPhone(value: string): string {
 }
 
 export default function BusinessSettingsPage() {
-  const { user, demoRole, business } = useBusinessAuth();
+  const { user, demoRole, business, canAccess, refreshMe } = useBusinessAuth();
   const role = user?.role ?? demoRole;
+  const canManageCompany = canAccess('business.settings.manage');
   const mockBusiness = business ?? getMockDashboardForRole(role).business;
 
   const [logoUrl, setLogoUrl] = useState(mockBusiness.logoUrl ?? '/belsoft-logo-2.jpg');
@@ -52,6 +57,11 @@ export default function BusinessSettingsPage() {
   const [sendingOtp, setSendingOtp] = useState(false);
   const [verifyingOtp, setVerifyingOtp] = useState(false);
   const [otpError, setOtpError] = useState<string | null>(null);
+
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [updatingPassword, setUpdatingPassword] = useState(false);
 
   useEffect(() => {
     setLogoUrl(mockBusiness.logoUrl ?? '/belsoft-logo-2.jpg');
@@ -77,7 +87,8 @@ export default function BusinessSettingsPage() {
     setOtpError(null);
   };
 
-  const handleLogoPick = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleLogoPick = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (!canManageCompany) return;
     const file = event.target.files?.[0];
     if (!file) return;
 
@@ -86,13 +97,53 @@ export default function BusinessSettingsPage() {
       return;
     }
 
-    const objectUrl = URL.createObjectURL(file);
-    setLogoUrl((previous) => {
-      if (previous.startsWith('blob:')) URL.revokeObjectURL(previous);
-      return objectUrl;
-    });
-    toast.success('Logo updated (demo)');
-    event.target.value = '';
+    try {
+      const updated = await businessAuthApi.uploadLogo(file);
+      setLogoUrl(updated.logoUrl || logoUrl);
+      toast.success('Logo updated');
+      await refreshMe();
+    } catch (error) {
+      toast.error(
+        error instanceof BusinessApiError
+          ? error.message
+          : error instanceof Error
+            ? error.message
+            : 'Could not upload logo',
+      );
+    } finally {
+      event.target.value = '';
+    }
+  };
+
+  const handleUpdatePassword = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!isBusinessPasswordValid(newPassword)) {
+      toast.error('New password does not meet requirements');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast.error('Passwords do not match');
+      return;
+    }
+
+    setUpdatingPassword(true);
+    try {
+      await businessAuthApi.updatePassword(currentPassword, newPassword);
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      toast.success('Password updated');
+    } catch (error) {
+      toast.error(
+        error instanceof BusinessApiError
+          ? error.message
+          : error instanceof Error
+            ? error.message
+            : 'Could not update password',
+      );
+    } finally {
+      setUpdatingPassword(false);
+    }
   };
 
   const handleSendOtp = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -182,7 +233,11 @@ export default function BusinessSettingsPage() {
     <div className="mx-auto max-w-3xl space-y-6">
       <PageHeader
         title="Business settings"
-        description="Company details are fixed. You can update logo, email, and phone — email and phone require verification."
+        description={
+          canManageCompany
+            ? 'Company details are fixed except logo, email, and phone. You can also update your password.'
+            : 'View company details and update your own password.'
+        }
       />
 
       <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
@@ -197,23 +252,25 @@ export default function BusinessSettingsPage() {
             className="rounded-xl border border-gray-200 object-contain p-1"
             unoptimized={logoUrl.startsWith('blob:')}
           />
-          <div>
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-            >
-              Change logo
-            </button>
-            <p className="mt-1.5 text-xs text-gray-500">PNG or JPG. Updates immediately (demo).</p>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={handleLogoPick}
-            />
-          </div>
+          {canManageCompany ? (
+            <div>
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Change logo
+              </button>
+              <p className="mt-1.5 text-xs text-gray-500">PNG or JPG. Stored in Sanity.</p>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleLogoPick}
+              />
+            </div>
+          ) : null}
         </div>
 
         <div className="space-y-4">
@@ -238,33 +295,94 @@ export default function BusinessSettingsPage() {
           <div>
             <div className="mb-1.5 flex items-center justify-between gap-3">
               <label className="block text-sm font-medium text-gray-700">Contact email</label>
-              <button
-                type="button"
-                onClick={() => openChange('email')}
-                className="text-sm font-medium text-blue-normal hover:text-blue-normal-hover"
-              >
-                Change
-              </button>
+              {canManageCompany ? (
+                <button
+                  type="button"
+                  onClick={() => openChange('email')}
+                  className="text-sm font-medium text-blue-normal hover:text-blue-normal-hover"
+                >
+                  Change
+                </button>
+              ) : null}
             </div>
             <input readOnly value={email} className={readonlyFieldClass} />
-            <p className="mt-1.5 text-xs text-gray-500">Requires email verification to update.</p>
+            {canManageCompany ? (
+              <p className="mt-1.5 text-xs text-gray-500">Requires email verification to update.</p>
+            ) : null}
           </div>
 
           <div>
             <div className="mb-1.5 flex items-center justify-between gap-3">
               <label className="block text-sm font-medium text-gray-700">Phone</label>
-              <button
-                type="button"
-                onClick={() => openChange('phone')}
-                className="text-sm font-medium text-blue-normal hover:text-blue-normal-hover"
-              >
-                Change
-              </button>
+              {canManageCompany ? (
+                <button
+                  type="button"
+                  onClick={() => openChange('phone')}
+                  className="text-sm font-medium text-blue-normal hover:text-blue-normal-hover"
+                >
+                  Change
+                </button>
+              ) : null}
             </div>
             <input readOnly value={phone} className={readonlyFieldClass} />
-            <p className="mt-1.5 text-xs text-gray-500">Requires SMS verification to update.</p>
+            {canManageCompany ? (
+              <p className="mt-1.5 text-xs text-gray-500">Requires SMS verification to update.</p>
+            ) : null}
           </div>
         </div>
+      </section>
+
+      <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+        <h2 className="mb-1 text-lg font-semibold text-gray-900">Security</h2>
+        <p className="mb-4 text-sm text-gray-500">Update the password for your own account.</p>
+        <form onSubmit={handleUpdatePassword} className="space-y-4">
+          <PasswordInput
+            id="current-password"
+            label="Current password"
+            value={currentPassword}
+            onChange={setCurrentPassword}
+            placeholder="Enter current password"
+            autoComplete="current-password"
+            required
+          />
+          <PasswordFieldWithRequirements
+            id="settings-new-password"
+            label="New password"
+            value={newPassword}
+            onChange={setNewPassword}
+            placeholder="Min. 8 characters"
+            autoComplete="new-password"
+            required
+            minLength={8}
+          />
+          <PasswordInput
+            id="settings-confirm-password"
+            label="Confirm new password"
+            value={confirmPassword}
+            onChange={setConfirmPassword}
+            placeholder="Re-enter new password"
+            autoComplete="new-password"
+            required
+            minLength={8}
+          />
+          {confirmPassword && newPassword !== confirmPassword ? (
+            <p className="text-sm text-red-normal" role="alert">
+              Passwords do not match.
+            </p>
+          ) : null}
+          <button
+            type="submit"
+            disabled={
+              updatingPassword ||
+              !currentPassword ||
+              !isBusinessPasswordValid(newPassword) ||
+              newPassword !== confirmPassword
+            }
+            className="rounded-xl bg-blue-normal px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-normal-hover disabled:opacity-60"
+          >
+            {updatingPassword ? 'Updating…' : 'Update password'}
+          </button>
+        </form>
       </section>
 
       <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
@@ -288,7 +406,7 @@ export default function BusinessSettingsPage() {
       </section>
 
       <BusinessFormModal
-        open={changeField !== null && !otpSent}
+        open={canManageCompany && changeField !== null && !otpSent}
         title={changeField === 'email' ? 'Change contact email' : 'Change phone number'}
         description={
           changeField === 'email'
@@ -325,7 +443,7 @@ export default function BusinessSettingsPage() {
       </BusinessFormModal>
 
       <BusinessFormModal
-        open={changeField !== null && otpSent}
+        open={canManageCompany && changeField !== null && otpSent}
         title="Verify change"
         description={
           changeField === 'email'

@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { PasswordFieldWithRequirements } from '@/components/business/PasswordFieldWithRequirements';
 import { PasswordInput } from '@/components/business/PasswordInput';
 import { isBusinessPasswordValid } from '@/constants/passwordPolicy';
+import { businessAuthApi, BusinessApiError } from '@/lib/businessApi';
 
 function ResetPasswordForm() {
   const router = useRouter();
@@ -34,14 +35,26 @@ function ResetPasswordForm() {
     password === confirmPassword &&
     !submitting;
 
-  const handleSubmit = (event: React.FormEvent) => {
+  const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!canSubmit) return;
 
     setSubmitting(true);
-    toast.success('Password updated (demo). Sign in with your new password.');
-    router.push('/business/sign-in');
-    setSubmitting(false);
+    try {
+      await businessAuthApi.resetPassword(token, password);
+      toast.success('Password updated. Sign in with your new password.');
+      router.push('/business/sign-in');
+    } catch (error) {
+      toast.error(
+        error instanceof BusinessApiError
+          ? error.message
+          : error instanceof Error
+            ? error.message
+            : 'Could not reset password',
+      );
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -147,9 +160,6 @@ function ResetPasswordForm() {
                   >
                     {submitting ? 'Updating…' : 'Update password'}
                   </button>
-                  <p className="text-center text-xs text-gray-500">
-                    Mock flow — password is not saved until the API is connected.
-                  </p>
                 </form>
 
                 <p className="mt-6 text-center text-sm text-gray-500">

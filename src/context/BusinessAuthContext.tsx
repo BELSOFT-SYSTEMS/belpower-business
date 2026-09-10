@@ -13,9 +13,15 @@ import type { BusinessDashboardData, BusinessRole, BusinessUserProfile } from '@
 import { canAccessBusiness } from '@/constants/businessNavPermissions';
 import { ALL_BUSINESS_ROLES } from '@/constants/businessRoles';
 import { getMockDashboardForRole, MOCK_SUPER_ADMIN } from '@/data/businessMocks';
+import {
+  businessAuthApi,
+  businessAuthStorage,
+  type BusinessAuthCompany,
+  type BusinessAuthSession,
+  type BusinessAuthUser,
+  type BusinessMePayload,
+} from '@/lib/businessApi';
 
-const TOKEN_KEY = 'businessToken';
-const PROFILE_KEY = 'businessProfile';
 const ROLE_KEY = 'businessDemoRole';
 
 function normalizeStoredRole(raw: string | null): BusinessRole {
@@ -28,9 +34,34 @@ function normalizeStoredRole(raw: string | null): BusinessRole {
   return ALL_BUSINESS_ROLES.includes(mapped) ? mapped : 'super_admin';
 }
 
+function toUserProfile(user: BusinessAuthUser): BusinessUserProfile {
+  return {
+    id: user.id,
+    firstName: user.firstName,
+    lastName: user.lastName,
+    email: user.email,
+    role: normalizeStoredRole(user.role),
+    branchId: user.branchId,
+    branchName: user.branchName,
+  };
+}
+
+function toBusinessProfile(business: BusinessAuthCompany): BusinessDashboardData['business'] {
+  return {
+    id: business.id,
+    businessId: business.businessId,
+    businessName: business.businessName,
+    logoUrl: business.logoUrl,
+    email: business.email,
+    phone: business.phone,
+    address: business.address,
+  };
+}
+
 type BusinessAuthContextValue = {
   user: BusinessUserProfile | null;
   business: BusinessDashboardData['business'] | null;
+  dashboardBootstrap: BusinessMePayload | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   demoRole: BusinessRole;
@@ -38,7 +69,10 @@ type BusinessAuthContextValue = {
   canAccess: (permission: string) => boolean;
   isSuperAdmin: boolean;
   signInMock: (role?: BusinessRole) => void;
-  logout: () => void;
+  applyAuthSession: (session: BusinessAuthSession) => void;
+  login: (email: string, password: string) => Promise<void>;
+  logout: () => Promise<void>;
+  refreshMe: () => Promise<void>;
 };
 
 const BusinessAuthContext = createContext<BusinessAuthContextValue | null>(null);
@@ -46,48 +80,164 @@ const BusinessAuthContext = createContext<BusinessAuthContextValue | null>(null)
 export function BusinessAuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<BusinessUserProfile | null>(null);
   const [business, setBusiness] = useState<BusinessDashboardData['business'] | null>(null);
+  const [dashboardBootstrap, setDashboardBootstrap] = useState<BusinessMePayload | null>(null);
   const [hasToken, setHasToken] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [demoRole, setDemoRoleState] = useState<BusinessRole>('super_admin');
 
-  const hydrate = useCallback(() => {
+  const persistBootstrap = useCallback((payload: BusinessMePayload) => {
+    sessionStorage.setItem(businessAuthStorage.dashboardKey, JSON.stringify(payload));
+    setDashboardBootstrap(payload);
+  }, []);
+
+  const applyAuthSession = useCallback(
+    (session: BusinessAuthSession) => {
+      const profile = toUserProfile(session.user);
+      const company = toBusinessProfile(session.business);
+      businessAuthStorage.setTokens(session.accessToken, session.refreshToken);
+      sessionStorage.setItem(businessAuthStorage.profileKey, JSON.stringify(profile));
+      sessionStorage.setItem(businessAuthStorage.businessKey, JSON.stringify(company));
+      sessionStorage.setItem(ROLE_KEY, profile.role);
+      setHasToken(true);
+      setUser(profile);
+      setBusiness(company);
+      setDemoRoleState(profile.role);
+
+      const {
+        accessToken: _a,
+        refreshToken: _r,
+        ...maybeBootstrap
+      } = session;
+      if (maybeBootstrap.wallet || maybeBootstrap.meters || maybeBootstrap.branches) {
+        persistBootstrap(maybeBootstrap as BusinessMePayload);
+      }
+    },
+    [persistBootstrap],
+  );
+
+  const refreshMe = useCallback(async () => {
+    const me = await businessAuthApi.me();
+    const profile = toUserProfile(me.user);
+    const company = toBusinessProfile(me.business);
+    sessionStorage.setItem(businessAuthStorage.profileKey, JSON.stringify(profile));
+    sessionStorage.setItem(businessAuthStorage.businessKey, JSON.stringify(company));
+    sessionStorage.setItem(ROLE_KEY, profile.role);
+    setUser(profile);
+    setBusiness(company);
+    setDemoRoleState(profile.role);
+    persistBootstrap(me);
+  }, [persistBootstrap]);
+
+  const hydrate = useCallback(async () => {
     if (typeof window === 'undefined') {
       setIsLoading(false);
       return;
     }
 
-    const token = sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY);
-    const profileRaw = sessionStorage.getItem(PROFILE_KEY) || localStorage.getItem(PROFILE_KEY);
+    const token = businessAuthStorage.getAccessToken();
+    const profileRaw = sessionStorage.getItem(businessAuthStorage.profileKey);
+    const businessRaw = sessionStorage.getItem(businessAuthStorage.businessKey);
+    const bootstrapRaw = sessionStorage.getItem(businessAuthStorage.dashboardKey);
     const role = normalizeStoredRole(sessionStorage.getItem(ROLE_KEY));
 
     setHasToken(Boolean(token));
 
-    if (token && profileRaw) {
+    if (!token) {
+      setIsLoading(false);
+      return;
+    }
+
+    if (profileRaw && businessRaw) {
       try {
-        const profile = JSON.parse(profileRaw) as BusinessUserProfile;
-        const dashboard = getMockDashboardForRole(role);
-        setUser(profile);
-        setBusiness(dashboard.business);
+        setUser(JSON.parse(profileRaw) as BusinessUserProfile);
+        setBusiness(JSON.parse(businessRaw) as BusinessDashboardData['business']);
         setDemoRoleState(role);
       } catch {
-        setUser(null);
-        setBusiness(null);
-        setHasToken(false);
+        // fall through to /me
+      }
+    }
+    if (bootstrapRaw) {
+      try {
+        setDashboardBootstrap(JSON.parse(bootstrapRaw) as BusinessMePayload);
+      } catch {
+        // ignore
       }
     }
 
-    setIsLoading(false);
-  }, []);
+    try {
+      const me = await businessAuthApi.me();
+      const profile = toUserProfile(me.user);
+      const company = toBusinessProfile(me.business);
+      sessionStorage.setItem(businessAuthStorage.profileKey, JSON.stringify(profile));
+      sessionStorage.setItem(businessAuthStorage.businessKey, JSON.stringify(company));
+      sessionStorage.setItem(ROLE_KEY, profile.role);
+      setUser(profile);
+      setBusiness(company);
+      setDemoRoleState(profile.role);
+      setHasToken(true);
+      persistBootstrap(me);
+    } catch {
+      const refresh = businessAuthStorage.getRefreshToken();
+      if (refresh) {
+        try {
+          const session = await businessAuthApi.refreshToken(refresh);
+          applyAuthSession(session);
+        } catch {
+          businessAuthStorage.clear();
+          sessionStorage.removeItem(ROLE_KEY);
+          setHasToken(false);
+          setUser(null);
+          setBusiness(null);
+        }
+      } else if (token === 'mock-business-token' && profileRaw) {
+        // Keep local mock/dev sessions working.
+        try {
+          const profile = JSON.parse(profileRaw) as BusinessUserProfile;
+          const dashboard = getMockDashboardForRole(role);
+          setUser(profile);
+          setBusiness(dashboard.business);
+          setDemoRoleState(role);
+          setHasToken(true);
+        } catch {
+          businessAuthStorage.clear();
+          setHasToken(false);
+          setUser(null);
+          setBusiness(null);
+        }
+      } else {
+        businessAuthStorage.clear();
+        setHasToken(false);
+        setUser(null);
+        setBusiness(null);
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  }, [applyAuthSession, persistBootstrap]);
 
   useEffect(() => {
-    hydrate();
+    void hydrate();
   }, [hydrate]);
+
+  const login = useCallback(
+    async (email: string, password: string) => {
+      const session = await businessAuthApi.login(email, password);
+      applyAuthSession(session);
+      try {
+        await refreshMe();
+      } catch {
+        // session already applied; bootstrap can load on next hydrate
+      }
+    },
+    [applyAuthSession, refreshMe],
+  );
 
   const signInMock = useCallback((role: BusinessRole = 'super_admin') => {
     const dashboard = getMockDashboardForRole(role);
     const profile = dashboard.user;
-    sessionStorage.setItem(TOKEN_KEY, 'mock-business-token');
-    sessionStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+    businessAuthStorage.setTokens('mock-business-token', null);
+    sessionStorage.setItem(businessAuthStorage.profileKey, JSON.stringify(profile));
+    sessionStorage.setItem(businessAuthStorage.businessKey, JSON.stringify(dashboard.business));
     sessionStorage.setItem(ROLE_KEY, role);
     setHasToken(true);
     setUser(profile);
@@ -95,12 +245,17 @@ export function BusinessAuthProvider({ children }: { children: ReactNode }) {
     setDemoRoleState(role);
   }, []);
 
-  const logout = useCallback(() => {
-    sessionStorage.removeItem(TOKEN_KEY);
-    sessionStorage.removeItem(PROFILE_KEY);
+  const logout = useCallback(async () => {
+    const refresh = businessAuthStorage.getRefreshToken();
+    try {
+      if (businessAuthStorage.getAccessToken() && businessAuthStorage.getAccessToken() !== 'mock-business-token') {
+        await businessAuthApi.logout(refresh);
+      }
+    } catch {
+      // ignore logout API errors
+    }
+    businessAuthStorage.clear();
     sessionStorage.removeItem(ROLE_KEY);
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(PROFILE_KEY);
     setHasToken(false);
     setUser(null);
     setBusiness(null);
@@ -110,7 +265,8 @@ export function BusinessAuthProvider({ children }: { children: ReactNode }) {
   const setDemoRole = useCallback((role: BusinessRole) => {
     const dashboard = getMockDashboardForRole(role);
     sessionStorage.setItem(ROLE_KEY, role);
-    sessionStorage.setItem(PROFILE_KEY, JSON.stringify(dashboard.user));
+    sessionStorage.setItem(businessAuthStorage.profileKey, JSON.stringify(dashboard.user));
+    sessionStorage.setItem(businessAuthStorage.businessKey, JSON.stringify(dashboard.business));
     setDemoRoleState(role);
     setUser(dashboard.user);
     setBusiness(dashboard.business);
@@ -120,6 +276,7 @@ export function BusinessAuthProvider({ children }: { children: ReactNode }) {
     () => ({
       user,
       business,
+      dashboardBootstrap,
       isAuthenticated: Boolean(user && hasToken),
       isLoading,
       demoRole,
@@ -127,9 +284,25 @@ export function BusinessAuthProvider({ children }: { children: ReactNode }) {
       canAccess: (permission) => canAccessBusiness(user?.role ?? demoRole, permission),
       isSuperAdmin: (user?.role ?? demoRole) === 'super_admin',
       signInMock,
+      applyAuthSession,
+      login,
       logout,
+      refreshMe,
     }),
-    [user, business, hasToken, isLoading, demoRole, setDemoRole, signInMock, logout]
+    [
+      user,
+      business,
+      dashboardBootstrap,
+      hasToken,
+      isLoading,
+      demoRole,
+      setDemoRole,
+      signInMock,
+      applyAuthSession,
+      login,
+      logout,
+      refreshMe,
+    ],
   );
 
   return <BusinessAuthContext.Provider value={value}>{children}</BusinessAuthContext.Provider>;

@@ -4,17 +4,31 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { businessAuthApi, BusinessApiError } from '@/lib/businessApi';
 
 export default function BusinessForgotPasswordPage() {
   const [email, setEmail] = useState('');
   const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = (event: React.FormEvent) => {
+  const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    setSubmitted(true);
-    toast.success('Password reset link sent (demo)');
-    const demoLink = `/business/reset-password?token=demo-reset-token&email=${encodeURIComponent(email)}`;
-    toast.message(`Demo reset link: ${demoLink}`);
+    setSubmitting(true);
+    try {
+      await businessAuthApi.forgotPassword(email.trim());
+      setSubmitted(true);
+      toast.success('If an account exists, a reset link has been sent');
+    } catch (error) {
+      toast.error(
+        error instanceof BusinessApiError
+          ? error.message
+          : error instanceof Error
+            ? error.message
+            : 'Could not send reset link',
+      );
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -62,14 +76,8 @@ export default function BusinessForgotPasswordPage() {
                 <h2 className="text-xl font-semibold text-gray-900">Check your email</h2>
                 <p className="mt-2 text-sm text-gray-600">
                   If an account exists for <span className="font-medium">{email}</span>, we sent a
-                  reset link. Demo mode — no email was actually sent.
+                  reset link. The link expires in 15 minutes.
                 </p>
-                <Link
-                  href={`/business/reset-password?token=demo-reset-token&email=${encodeURIComponent(email)}`}
-                  className="mt-4 inline-block text-sm font-medium text-blue-normal hover:underline"
-                >
-                  Open demo reset page
-                </Link>
                 <p className="mt-4">
                   <Link
                     href="/business/sign-in"
@@ -106,13 +114,11 @@ export default function BusinessForgotPasswordPage() {
                   </div>
                   <button
                     type="submit"
-                    className="w-full rounded-xl bg-blue-normal px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-normal-hover"
+                    disabled={submitting}
+                    className="w-full rounded-xl bg-blue-normal px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-normal-hover disabled:opacity-60"
                   >
-                    Send reset link
+                    {submitting ? 'Sending…' : 'Send reset link'}
                   </button>
-                  <p className="text-center text-xs text-gray-500">
-                    Mock flow — no email is sent until the API is connected.
-                  </p>
                 </form>
 
                 <p className="mt-6 text-center text-sm text-gray-500">
