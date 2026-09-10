@@ -33,6 +33,7 @@ import {
   ReviewList,
   SavedBeneficiaryPicker,
   fieldClass,
+  paymentBranchLabel,
   usePagedItems,
   usePaymentSession,
   usePlanPackagePageSize,
@@ -232,7 +233,7 @@ export function CablePaymentFlow() {
           title="Subscription paid"
           description={`${selectedPackage.name} has been renewed for ${smartCard}.`}
           reference={result.reference}
-          rows={[...summary, { label: 'Branch', value: session.selectedBranch?.branchName ?? '—' }]}
+          rows={[...summary, { label: 'Branch', value: paymentBranchLabel(session.selectedBranch) }]}
           onAgain={reset}
           againLabel="Pay another subscription"
         />
@@ -244,7 +245,7 @@ export function CablePaymentFlow() {
           rows={[
             ...summary,
             { label: 'Status', value: 'Pending confirmation' },
-            { label: 'Branch', value: session.selectedBranch?.branchName ?? '—' },
+            { label: 'Branch', value: paymentBranchLabel(session.selectedBranch) },
           ]}
           onAgain={reset}
           againLabel="Pay another subscription"

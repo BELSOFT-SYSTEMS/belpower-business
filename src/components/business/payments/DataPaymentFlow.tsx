@@ -32,6 +32,7 @@ import {
   ReviewList,
   SavedBeneficiaryPicker,
   fieldClass,
+  paymentBranchLabel,
   usePagedItems,
   usePaymentSession,
   usePlanPackagePageSize,
@@ -215,7 +216,7 @@ export function DataPaymentFlow() {
           title="Data sent"
           description={`${selectedPlan.name}${selectedPlan.validity ? ` (${selectedPlan.validity})` : ''} has been sent to ${normalizePhone(phone)}.`}
           reference={result.reference}
-          rows={[...summary, { label: 'Branch', value: session.selectedBranch?.branchName ?? '—' }]}
+          rows={[...summary, { label: 'Branch', value: paymentBranchLabel(session.selectedBranch) }]}
           onAgain={reset}
           againLabel="Buy data again"
         />
@@ -227,7 +228,7 @@ export function DataPaymentFlow() {
           rows={[
             ...summary,
             { label: 'Status', value: 'Pending confirmation' },
-            { label: 'Branch', value: session.selectedBranch?.branchName ?? '—' },
+            { label: 'Branch', value: paymentBranchLabel(session.selectedBranch) },
           ]}
           onAgain={reset}
           againLabel="Buy data again"

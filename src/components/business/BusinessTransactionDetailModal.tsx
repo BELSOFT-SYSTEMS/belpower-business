@@ -183,7 +183,7 @@ function toListUpdate(detail: BusinessTransactionDetail) {
     reference: detail.reference,
     service: detail.service,
     provider: detail.provider,
-    branchName: detail.branchName,
+    branchName: formatBusinessBranchLabel(detail.branchName),
     userName: detail.userName,
     createdAt: detail.created_at,
     entryType: detail.entryType,

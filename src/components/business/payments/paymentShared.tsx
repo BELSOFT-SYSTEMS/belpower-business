@@ -17,6 +17,7 @@ import {
 import type { BusinessBeneficiary } from '@/types/business';
 import { getPaymentBlockReason, type PaymentService as CatalogService } from '@/data/mockPaymentCatalog';
 import { businessWalletApi } from '@/lib/businessApi';
+import { formatBusinessBranchLabel } from '@/utils/businessBranchLabel';
 import { formatPrice } from '@/utils/formatPrice';
 import { cn } from '@/lib/utils';
 
@@ -33,6 +34,13 @@ type SessionBranch = {
   isFrozen?: boolean;
   dailyLimit?: number;
 };
+
+/** Branch label for payment success / review rows (never blank for company wallet). */
+export function paymentBranchLabel(
+  selectedBranch: { branchName?: string | null } | null | undefined,
+): string {
+  return formatBusinessBranchLabel(selectedBranch?.branchName);
+}
 
 export const fieldClass =
   'mt-1.5 w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-blue-normal focus:ring-2 focus:ring-blue-normal/20 disabled:bg-gray-50';
@@ -225,7 +233,22 @@ export function usePaymentSession() {
         walletId: liveCompany?.walletId,
       } satisfies SessionBranch;
     }
-    return branches.find((branch) => branch.branchId === branchId) ?? branches[0];
+    const matched = branches.find((branch) => branch.branchId === branchId) ?? branches[0];
+    if (matched) {
+      return {
+        ...matched,
+        branchName: formatBusinessBranchLabel(matched.branchName),
+      };
+    }
+    return {
+      branchId: HEAD_OFFICE_BRANCH_ID,
+      branchName: 'Head Office',
+      allocatedBalance: defaultWallet.balance,
+      todaySpend: dashboard.wallet.todaySpend,
+      monthSpend: dashboard.wallet.monthSpend,
+      monthTransactions: 0,
+      walletId: liveCompany?.walletId,
+    } satisfies SessionBranch;
   }, [
     branchId,
     branches,

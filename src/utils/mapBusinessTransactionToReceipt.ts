@@ -12,6 +12,7 @@ import {
   getTransactionCustomerName,
   getTrustedTransactionTotal,
 } from '@/lib/transaction-display';
+import { formatBusinessBranchLabel } from '@/utils/businessBranchLabel';
 
 function getReceiptStatus(status: string): {
   statusLabel: string;
@@ -75,6 +76,7 @@ export function mapBusinessTransactionToReceipt(
     fullName: detail.userName,
     customerEmail: detail.email,
     customerPhone: detail.phoneNumber ?? detail.phone_number,
+    branchName: formatBusinessBranchLabel(detail.branchName),
     payment_method: paymentMethod,
     paymentType: paymentMethod,
     paymentMethodLabel,

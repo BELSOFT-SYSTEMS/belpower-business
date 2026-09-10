@@ -21,6 +21,7 @@ import {
 import { BusinessApiError, businessWalletApi } from '@/lib/businessApi';
 import type { WalletStatementRow } from '@/types/business';
 import { formatAdminRoleLabel } from '@/utils/businessRoleDisplay';
+import { formatBusinessBranchLabel } from '@/utils/businessBranchLabel';
 import { formatPrice } from '@/utils/formatPrice';
 
 const ALL_WALLETS = 'all';
@@ -253,7 +254,7 @@ export function WalletStatementsFlow() {
                   row.amount,
                   row.balanceBefore,
                   row.balanceAfter,
-                  row.branchName ?? '',
+                  formatBusinessBranchLabel(row.branchName),
                   `"${String(row.performedByName || '').replace(/"/g, '""')}"`,
                   row.performedByRole ?? '',
                   row.status,
@@ -374,7 +375,7 @@ export function WalletStatementsFlow() {
                     </td>
                     <td className="min-w-[180px] px-4 py-3 text-gray-900">{row.description}</td>
                     <td className="whitespace-nowrap px-4 py-3 text-gray-600">
-                      {row.branchName ?? '—'}
+                      {formatBusinessBranchLabel(row.branchName)}
                     </td>
                     <td className="whitespace-nowrap px-4 py-3 text-gray-900">
                       {row.performedByName}

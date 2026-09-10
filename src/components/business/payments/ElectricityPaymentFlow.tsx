@@ -41,6 +41,7 @@ import {
   ReviewList,
   SavedBeneficiaryPicker,
   fieldClass,
+  paymentBranchLabel,
   usePaymentSession,
 } from '@/components/business/payments/paymentShared';
 
@@ -308,7 +309,7 @@ export function ElectricityPaymentFlow() {
             { label: 'Type', value: meterType },
             { label: 'Amount', value: formatPrice(amount) },
             ...(result.token ? [{ label: 'Token', value: result.token }] : []),
-            { label: 'Branch', value: session.selectedBranch?.branchName ?? '—' },
+            { label: 'Branch', value: paymentBranchLabel(session.selectedBranch) },
           ]}
           onAgain={reset}
           againLabel="Pay another meter"

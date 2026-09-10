@@ -42,6 +42,7 @@ export type ReceiptTransaction = {
   customerEmail?: string;
   customerPhone?: string;
   payer?: string;
+  branchName?: string;
   vatAmount?: number;
   serviceCharge?: number;
   service_charge?: number;
@@ -170,6 +171,13 @@ export default function ReceiptHTML({
               {transaction.receipt_number || transaction.receiptNumber || 'N/A'}
             </span>
           </div>
+
+          {transaction.branchName ? (
+            <div className={styles.row}>
+              <span className={styles.label}>Branch:</span>
+              <span className={styles.value}>{transaction.branchName}</span>
+            </div>
+          ) : null}
 
           {(transaction.depositType ||
             transaction.paymentMethodLabel ||

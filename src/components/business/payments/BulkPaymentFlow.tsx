@@ -36,6 +36,7 @@ import {
   PaymentSuccessView,
   demoNote,
   fieldClass,
+  paymentBranchLabel,
   primaryButtonClass,
   secondaryButtonClass,
   usePaymentSession,
@@ -336,7 +337,7 @@ export function BulkPaymentFlow() {
             rows={[
               { label: 'Lines paid', value: String(paidCount) },
               { label: 'Failed', value: String(failedCount) },
-              { label: 'Branch', value: session.selectedBranch?.branchName ?? '—' },
+              { label: 'Branch', value: paymentBranchLabel(session.selectedBranch) },
             ]}
             onAgain={reset}
             againLabel="Run another batch"

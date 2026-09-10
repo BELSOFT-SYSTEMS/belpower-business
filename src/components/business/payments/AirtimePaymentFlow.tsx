@@ -34,6 +34,7 @@ import {
   SavedBeneficiaryPicker,
   ReviewList,
   fieldClass,
+  paymentBranchLabel,
   usePaymentSession,
 } from '@/components/business/payments/paymentShared';
 
@@ -156,7 +157,7 @@ export function AirtimePaymentFlow() {
             { label: 'Network', value: getProviderName('airtime', network) },
             { label: 'Phone', value: normalizePhone(phone) },
             { label: 'Amount', value: formatPrice(amount) },
-            { label: 'Branch', value: session.selectedBranch?.branchName ?? '—' },
+            { label: 'Branch', value: paymentBranchLabel(session.selectedBranch) },
           ]}
           onAgain={reset}
           againLabel="Buy airtime again"
