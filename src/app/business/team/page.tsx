@@ -213,6 +213,7 @@ export default function TeamPage() {
       );
       setSuspendTarget(null);
       setMenuOpenId(null);
+      setMenuPosition(null);
       await load();
     } catch (error) {
       toast.error(error instanceof BusinessApiError ? error.message : 'Could not update member');
