@@ -17,7 +17,8 @@ type BusinessTransactionProviderIconProps = {
 
 /**
  * Provider logo with onError fallback — same pattern as belpower-frontend
- * `TransactionProviderIcon` (avoids broken Next/Image when a logo path 404s).
+ * `TransactionProviderIcon`. Remounts when provider changes so a prior 404
+ * cannot leave the fallback stuck after the list is hydrated from detail.
  */
 export function BusinessTransactionProviderIcon({
   transaction,
@@ -25,16 +26,19 @@ export function BusinessTransactionProviderIcon({
   size = 36,
   className,
 }: BusinessTransactionProviderIconProps) {
-  const [src, setSrc] = useState(() => getTransactionIcon(transaction));
+  const resolvedSrc = getTransactionIcon(transaction);
   const fallbackType = transaction.type || transaction.service || transaction.payment_for;
+  const fallbackSrc = getTransactionIconFallback(fallbackType);
+  const [src, setSrc] = useState(resolvedSrc);
 
   useEffect(() => {
-    setSrc(getTransactionIcon(transaction));
-  }, [transaction.type, transaction.service, transaction.provider, transaction.payment_for]);
+    setSrc(resolvedSrc);
+  }, [resolvedSrc]);
 
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img
+      key={resolvedSrc}
       src={src}
       alt={alt || transaction.service || transaction.type || 'transaction'}
       width={size}
@@ -48,7 +52,9 @@ export function BusinessTransactionProviderIcon({
         minHeight: size,
         maxHeight: size,
       }}
-      onError={() => setSrc(getTransactionIconFallback(fallbackType))}
+      onError={() => {
+        if (src !== fallbackSrc) setSrc(fallbackSrc);
+      }}
     />
   );
 }

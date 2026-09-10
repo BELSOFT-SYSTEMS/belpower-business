@@ -28,6 +28,7 @@ import { downloadBusinessReceipt } from '@/utils/downloadBusinessReceipt';
 import { getBusinessBuyAgainLabel, getBusinessBuyAgainPath } from '@/utils/transactionActions';
 import { formatPrice } from '@/utils/formatPrice';
 import { formatBusinessBranchLabel } from '@/utils/businessBranchLabel';
+import { resolveBusinessTransactionProvider } from '@/utils/resolveBusinessTransactionProvider';
 import { StatusBadge } from '@/components/business/StatusBadge';
 import { BusinessTransactionProviderIcon } from '@/components/business/BusinessTransactionProviderIcon';
 import { cn } from '@/lib/utils';
@@ -115,27 +116,10 @@ function resolveProviderValue(
   provider?: string | null,
   metadata?: BusinessTransactionDetail['metadata'],
 ): string {
-  const candidates = [
+  return resolveBusinessTransactionProvider({
     provider,
-    metadata?.provider,
-    metadata?.disco,
-    metadata?.network,
-  ];
-  for (const candidate of candidates) {
-    const value = String(candidate || '').trim();
-    const normalized = value.toLowerCase();
-    if (
-      value &&
-      value !== '—' &&
-      value !== '-' &&
-      normalized !== 'n/a' &&
-      normalized !== 'null' &&
-      normalized !== 'unknown'
-    ) {
-      return value;
-    }
-  }
-  return '';
+    metadata: metadata as Record<string, unknown> | null | undefined,
+  });
 }
 
 function getProviderLabel(transaction: BusinessTransactionDetail) {

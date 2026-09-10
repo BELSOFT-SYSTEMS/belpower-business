@@ -20,6 +20,7 @@ import { BusinessApiError, businessWalletApi } from '@/lib/businessApi';
 import type { BranchWalletOverview, BusinessTransactionPreview } from '@/types/business';
 import { formatPrice } from '@/utils/formatPrice';
 import { formatBusinessBranchLabel } from '@/utils/businessBranchLabel';
+import { resolveBusinessTransactionProvider } from '@/utils/resolveBusinessTransactionProvider';
 
 type LiveScope = BranchWalletOverview & { isFrozen?: boolean; walletId?: string };
 
@@ -166,7 +167,10 @@ export default function WalletPage() {
       id: tx.id,
       reference: tx.reference,
       service: tx.service || 'payment',
-      provider: tx.provider || '',
+      provider: resolveBusinessTransactionProvider({
+        provider: tx.provider,
+        metadata: tx.metadata,
+      }),
       amount: tx.amount,
       status:
         tx.status === 'completed' || tx.status === 'pending' || tx.status === 'failed'

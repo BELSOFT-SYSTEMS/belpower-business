@@ -25,6 +25,7 @@ import {
   AIRTIME_NETWORKS,
   CABLE_PROVIDERS,
   ELECTRICITY_DISCOS,
+  detectNetworkFromPhone,
   getProviderLogo,
   getProviderName,
   isValidNigerianPhone,
@@ -1363,11 +1364,18 @@ function BeneficiaryCard({
     item.service === 'phone' || item.service === 'airtime' || item.service === 'data'
       ? 'airtime'
       : item.service;
-  const providerLabel = getProviderName(catalogService, item.provider);
+  const resolvedProvider =
+    catalogService === 'airtime' &&
+    (!item.provider || item.provider.toLowerCase() === 'unknown')
+      ? detectNetworkFromPhone(item.accountNumber) || item.provider
+      : item.provider;
+  const providerLabel = getProviderName(catalogService, resolvedProvider);
   const detailLine =
     item.service === 'electricity'
       ? `${providerLabel} · ${item.meterType ?? 'prepaid'}`
-      : providerLabel;
+      : providerLabel && providerLabel.toLowerCase() !== 'unknown'
+        ? providerLabel
+        : null;
   const isPhone = item.service === 'phone' || item.service === 'airtime' || item.service === 'data';
 
   return (
@@ -1380,7 +1388,7 @@ function BeneficiaryCard({
       <div className="flex gap-3">
         <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-blue-50 ring-1 ring-blue-100">
           <Image
-            src={getProviderLogo(catalogService, item.provider)}
+            src={getProviderLogo(catalogService, resolvedProvider)}
             alt=""
             width={28}
             height={28}
@@ -1405,7 +1413,9 @@ function BeneficiaryCard({
                 ) : null}
               </div>
               <p className="mt-1 font-mono text-sm text-gray-800">{item.accountNumber}</p>
-              <p className="mt-1 text-sm capitalize text-gray-600">{detailLine}</p>
+              {detailLine ? (
+                <p className="mt-1 text-sm capitalize text-gray-600">{detailLine}</p>
+              ) : null}
               {item.customerName ? (
                 <p className="mt-1 text-sm text-gray-700">{item.customerName}</p>
               ) : null}

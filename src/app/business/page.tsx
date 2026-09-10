@@ -13,6 +13,7 @@ import { canViewCompanyWallet } from '@/constants/businessRoles';
 import { formatPrice } from '@/utils/formatPrice';
 import { formatAdminRoleLabel } from '@/utils/businessRoleDisplay';
 import { formatBusinessBranchLabel } from '@/utils/businessBranchLabel';
+import { resolveBusinessTransactionProvider } from '@/utils/resolveBusinessTransactionProvider';
 import type {
   BranchMeter,
   BusinessRole,
@@ -87,13 +88,17 @@ function mapTransactions(
     branchName: string | null;
     userName: string | null;
     createdAt: string | null;
+    metadata?: Record<string, unknown> | null;
   }> = [],
 ): BusinessTransactionPreview[] {
   return rows.map((tx) => ({
     id: tx.id,
     reference: tx.reference,
     service: tx.service || 'payment',
-    provider: tx.provider || '',
+    provider: resolveBusinessTransactionProvider({
+      provider: tx.provider,
+      metadata: tx.metadata,
+    }),
     amount: tx.amount,
     status:
       tx.status === 'completed' || tx.status === 'pending' || tx.status === 'failed'

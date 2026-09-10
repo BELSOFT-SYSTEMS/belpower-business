@@ -257,6 +257,11 @@ export type BusinessMePayload = {
     branchName: string | null;
     userName: string | null;
     createdAt: string | null;
+    metadata?: {
+      provider?: string | null;
+      disco?: string | null;
+      network?: string | null;
+    } | null;
   }>;
 };
 

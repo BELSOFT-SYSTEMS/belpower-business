@@ -9,6 +9,7 @@ import { BusinessApiError, businessTransactionsApi } from '@/lib/businessApi';
 import type { BusinessTransactionPreview } from '@/types/business';
 import { toast } from 'sonner';
 import { formatBusinessBranchLabel } from '@/utils/businessBranchLabel';
+import { resolveBusinessTransactionProvider } from '@/utils/resolveBusinessTransactionProvider';
 
 const STATUS_FILTERS = ['all', 'completed', 'pending', 'failed'] as const;
 
@@ -24,13 +25,17 @@ function mapLiveTransactions(
     branchName: string | null;
     userName: string | null;
     createdAt: string | null;
+    metadata?: Record<string, unknown> | null;
   }>,
 ): BusinessTransactionPreview[] {
   return rows.map((tx) => ({
     id: tx.id,
     reference: tx.reference,
     service: tx.service || 'payment',
-    provider: tx.provider || '',
+    provider: resolveBusinessTransactionProvider({
+      provider: tx.provider,
+      metadata: tx.metadata,
+    }),
     amount: tx.amount,
     status:
       tx.status === 'completed' || tx.status === 'pending' || tx.status === 'failed'
