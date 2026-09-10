@@ -169,13 +169,64 @@ export type BusinessMePayload = {
     } | null;
   } | null;
   branches?: Array<Record<string, unknown>>;
-  meters?: Array<Record<string, unknown>>;
-  wallet?: Record<string, unknown> | null;
+  meters?: Array<{
+    id: string;
+    branchId: string;
+    branchName: string;
+    meterNumber: string;
+    disco: string | null;
+    meterType: string | null;
+    isHeadOffice?: boolean;
+    isPrimary?: boolean;
+    customerName?: string | null;
+  }>;
+  wallet?: {
+    id?: string;
+    scope?: string;
+    branchId?: string | null;
+    branchName?: string | null;
+    balance?: number;
+    availableBalance?: number;
+    todaySpend?: number;
+    monthSpend?: number;
+    currency?: string;
+    status?: string;
+    isFrozen?: boolean;
+    dailyLimit?: number;
+  } | null;
   wallets?: Array<Record<string, unknown>>;
   beneficiaries?: Array<Record<string, unknown>>;
-  notifications?: Array<Record<string, unknown>>;
+  notifications?: Array<{
+    id: string;
+    title: string;
+    message: string;
+    type: string;
+    read: boolean;
+    createdAt: string | null;
+  }>;
   unreadNotificationsCount?: number;
-  recentTransactions?: Array<Record<string, unknown>>;
+  stats?: {
+    todaySpend: number;
+    monthSpend: number;
+    activeBranches: number;
+  };
+  branchSpend?: Array<{
+    branchId: string;
+    branchName: string;
+    amount: number;
+  }>;
+  recentTransactions?: Array<{
+    id: string;
+    reference: string;
+    service: string | null;
+    provider: string | null;
+    amount: number;
+    status: string;
+    entryType: 'credit' | 'debit';
+    branchName: string | null;
+    userName: string | null;
+    createdAt: string | null;
+  }>;
 };
 
 export const businessAuthApi = {
@@ -303,6 +354,107 @@ export const businessAuthApi = {
       method: 'POST',
       auth: true,
       body: JSON.stringify({ refreshToken: refreshToken || undefined }),
+    });
+  },
+};
+
+export const businessBranchesApi = {
+  list() {
+    return businessApiRequest<
+      Array<{
+        id: string;
+        name: string;
+        code: string | null;
+        city: string | null;
+        address: string | null;
+        isHeadOffice: boolean;
+        status: string;
+        userCount: number;
+        meterCount: number;
+        wallet: {
+          id: string;
+          availableBalance: number;
+          balance: number;
+        } | null;
+      }>
+    >('/branches', { method: 'GET', auth: true });
+  },
+
+  create(payload: {
+    name: string;
+    code: string;
+    city: string;
+    address: string;
+    verificationId: string;
+    primaryPhone?: string | null;
+  }) {
+    return businessApiRequest<{
+      id: string;
+      name: string;
+      code: string | null;
+      city: string | null;
+      address: string | null;
+      isHeadOffice: boolean;
+      status: string;
+      userCount: number;
+      meterCount: number;
+      wallet: Record<string, unknown> | null;
+    }>('/branches', {
+      method: 'POST',
+      auth: true,
+      body: JSON.stringify(payload),
+    });
+  },
+};
+
+export const businessWalletApi = {
+  overview() {
+    return businessApiRequest<{
+      companyWallet: {
+        id: string;
+        availableBalance: number;
+        balance: number;
+        todaySpend?: number;
+        monthSpend?: number;
+        monthTransactions?: number;
+      } | null;
+      wallets: Array<{
+        id: string;
+        scope: string;
+        branchId: string | null;
+        branchName: string | null;
+        availableBalance: number;
+        balance: number;
+        todaySpend?: number;
+        monthSpend?: number;
+        monthTransactions?: number;
+        isFrozen?: boolean;
+      }>;
+      unallocatedBalance: number;
+      totalAllocated: number;
+      allocatableBranches: Array<{
+        branchId: string;
+        branchName: string;
+        walletId: string;
+        allocatedBalance: number;
+        status: string;
+        isFrozen: boolean;
+      }>;
+    }>('/wallet', { method: 'GET', auth: true });
+  },
+
+  allocate(payload: { branchId: string; amount: number; note?: string }) {
+    return businessApiRequest<{
+      reference: string;
+      amount: number;
+      branchId: string;
+      branchName: string;
+      companyWallet: { id: string; availableBalance: number };
+      branchWallet: { id: string; availableBalance: number };
+    }>('/wallet/allocate', {
+      method: 'POST',
+      auth: true,
+      body: JSON.stringify(payload),
     });
   },
 };

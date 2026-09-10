@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Download, ArrowRightLeft, Wallet } from 'lucide-react';
+import { toast } from 'sonner';
 import { BusinessSelect } from '@/components/business/BusinessSelect';
 import { BusinessTransactionList } from '@/components/business/BusinessTransactionList';
 import { useBusinessAuth } from '@/context/BusinessAuthContext';
@@ -15,23 +16,93 @@ import {
   getWalletScopeOptionsForRole,
   isHeadOfficeWalletScope,
 } from '@/data/businessMocks';
+import { BusinessApiError, businessWalletApi } from '@/lib/businessApi';
+import type { BranchWalletOverview, BusinessTransactionPreview } from '@/types/business';
 import { formatPrice } from '@/utils/formatPrice';
 
+type LiveScope = BranchWalletOverview & { isFrozen?: boolean };
+
+const COMPANY_SCOPE_ID = HEAD_OFFICE_BRANCH_ID;
+
 export default function WalletPage() {
-  const { user, demoRole, canAccess } = useBusinessAuth();
+  const { user, demoRole, canAccess, isAuthenticated, dashboardBootstrap } = useBusinessAuth();
   const role = user?.role ?? demoRole;
-  const dashboard = getMockDashboardForRole(role);
-  const { wallet } = dashboard;
-  const scopeOptions = useMemo(() => getWalletScopeOptionsForRole(role), [role]);
-  const allTransactions = getMockTransactionsForRole(role);
+  const mockDashboard = getMockDashboardForRole(role);
+  const mockScopeOptions = useMemo(() => getWalletScopeOptionsForRole(role), [role]);
+  const mockTransactions = getMockTransactionsForRole(role);
   const canViewCompanyWallet = canViewAllBranchWalletInfo(role);
   const previousRoleRef = useRef(role);
 
+  const [liveScopes, setLiveScopes] = useState<LiveScope[] | null>(null);
+  const [totalAllocatedLive, setTotalAllocatedLive] = useState(0);
+  const [loading, setLoading] = useState(false);
+
   const [selectedScopeId, setSelectedScopeId] = useState(() =>
     canViewAllBranchWalletInfo(role)
-      ? HEAD_OFFICE_BRANCH_ID
-      : (user?.branchId ?? scopeOptions[0]?.branchId ?? ''),
+      ? COMPANY_SCOPE_ID
+      : (user?.branchId ?? mockScopeOptions[0]?.branchId ?? ''),
   );
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setLiveScopes(null);
+      return;
+    }
+
+    let cancelled = false;
+    setLoading(true);
+    void (async () => {
+      try {
+        const overview = await businessWalletApi.overview();
+        if (cancelled) return;
+
+        const scopes: LiveScope[] = [];
+        if (overview.companyWallet && canViewCompanyWallet) {
+          scopes.push({
+            branchId: COMPANY_SCOPE_ID,
+            branchName: 'Head Office',
+            allocatedBalance: overview.companyWallet.availableBalance,
+            todaySpend: overview.companyWallet.todaySpend ?? 0,
+            monthSpend: overview.companyWallet.monthSpend ?? 0,
+            monthTransactions: overview.companyWallet.monthTransactions ?? 0,
+            isFrozen: Boolean(
+              overview.wallets.find((w) => w.scope === 'company')?.isFrozen,
+            ),
+          });
+        }
+
+        for (const wallet of overview.wallets.filter((w) => w.scope === 'branch')) {
+          if (!wallet.branchId) continue;
+          scopes.push({
+            branchId: wallet.branchId,
+            branchName: wallet.branchName || 'Branch',
+            allocatedBalance: wallet.availableBalance,
+            todaySpend: wallet.todaySpend ?? 0,
+            monthSpend: wallet.monthSpend ?? 0,
+            monthTransactions: wallet.monthTransactions ?? 0,
+            isFrozen: Boolean(wallet.isFrozen),
+          });
+        }
+
+        setLiveScopes(scopes);
+        setTotalAllocatedLive(overview.totalAllocated);
+      } catch (error) {
+        if (!cancelled) {
+          toast.error(
+            error instanceof BusinessApiError ? error.message : 'Could not load wallet overview',
+          );
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [canViewCompanyWallet, isAuthenticated]);
+
+  const scopeOptions = liveScopes ?? mockScopeOptions;
 
   useEffect(() => {
     const roleChanged = previousRoleRef.current !== role;
@@ -39,7 +110,7 @@ export default function WalletPage() {
 
     if (roleChanged) {
       if (canViewCompanyWallet) {
-        setSelectedScopeId(HEAD_OFFICE_BRANCH_ID);
+        setSelectedScopeId(COMPANY_SCOPE_ID);
         return;
       }
       setSelectedScopeId(user?.branchId ?? scopeOptions[0]?.branchId ?? '');
@@ -50,7 +121,7 @@ export default function WalletPage() {
     if (!stillValid) {
       setSelectedScopeId(
         canViewCompanyWallet
-          ? HEAD_OFFICE_BRANCH_ID
+          ? COMPANY_SCOPE_ID
           : (user?.branchId ?? scopeOptions[0]?.branchId ?? ''),
       );
     }
@@ -62,6 +133,9 @@ export default function WalletPage() {
   );
 
   const viewingHeadOffice = isHeadOfficeWalletScope(selectedScope?.branchId);
+  const isFrozen = Boolean(
+    (selectedScope as LiveScope | undefined)?.isFrozen ?? mockDashboard.wallet.isFrozen,
+  );
 
   const balanceLabel = viewingHeadOffice
     ? 'Company wallet (Head Office)'
@@ -70,19 +144,51 @@ export default function WalletPage() {
       : 'Branch wallet balance';
 
   const balanceAmount = selectedScope?.allocatedBalance ?? 0;
+  const allocatedTotal = liveScopes ? totalAllocatedLive : getTotalAllocatedBalance();
 
   const balanceSubtitle = viewingHeadOffice
-    ? `Held at Head Office · ${formatPrice(getTotalAllocatedBalance())} already allocated to branches`
+    ? `Held at Head Office · ${formatPrice(allocatedTotal)} already allocated to branches`
     : canViewCompanyWallet
       ? 'Allocated from the Head Office company wallet'
       : `Allocated to ${selectedScope?.branchName ?? 'your branch'}`;
 
+  const liveTransactions = useMemo((): BusinessTransactionPreview[] => {
+    if (!isAuthenticated || !dashboardBootstrap?.recentTransactions) return [];
+    return dashboardBootstrap.recentTransactions.map((tx) => ({
+      id: tx.id,
+      reference: tx.reference,
+      service: tx.service || 'payment',
+      provider: tx.provider || '—',
+      amount: tx.amount,
+      status:
+        tx.status === 'completed' || tx.status === 'pending' || tx.status === 'failed'
+          ? tx.status
+          : 'pending',
+      entryType: tx.entryType,
+      branchName: tx.branchName || '—',
+      userName: tx.userName || '—',
+      createdAt: tx.createdAt || new Date().toISOString(),
+    }));
+  }, [dashboardBootstrap?.recentTransactions, isAuthenticated]);
+
   const scopeActivity = useMemo(() => {
     if (!selectedScope) return [];
-    return allTransactions
+    const source = liveScopes ? liveTransactions : mockTransactions;
+    if (viewingHeadOffice) {
+      return source
+        .filter(
+          (tx) =>
+            !tx.branchName ||
+            tx.branchName === '—' ||
+            tx.branchName === 'Head Office' ||
+            tx.service === 'business_wallet_allocate',
+        )
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    }
+    return source
       .filter((tx) => tx.branchName === selectedScope.branchName)
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  }, [allTransactions, selectedScope]);
+  }, [liveScopes, liveTransactions, mockTransactions, selectedScope, viewingHeadOffice]);
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -92,7 +198,7 @@ export default function WalletPage() {
           <BusinessSelect
             value={selectedScope?.branchId ?? selectedScopeId}
             onChange={setSelectedScopeId}
-            disabled={scopeOptions.length <= 1}
+            disabled={scopeOptions.length <= 1 || loading}
             fitContent
             aria-label="Select wallet scope"
             options={scopeOptions.map((scope) => ({
@@ -119,7 +225,7 @@ export default function WalletPage() {
           <p className="text-sm text-gray-500">{balanceLabel}</p>
           <p className="mt-1 text-3xl font-semibold text-gray-900">{formatPrice(balanceAmount)}</p>
           <p className="mt-1 text-xs text-gray-500">{balanceSubtitle}</p>
-          {wallet.isFrozen && (
+          {isFrozen && (
             <p className="mt-2 text-sm font-medium text-red-normal">Wallet is frozen</p>
           )}
         </div>
@@ -178,9 +284,14 @@ export default function WalletPage() {
           <h2 className="text-lg font-semibold text-gray-900">
             {viewingHeadOffice ? 'Head Office activity' : 'Recent activity'}
           </h2>
-          <Link href="/business/transactions" className="text-sm font-medium text-blue-normal hover:underline">
-            View all
-          </Link>
+          {canAccess('transactions.view') ? (
+            <Link
+              href="/business/transactions"
+              className="text-sm font-medium text-blue-normal hover:underline"
+            >
+              View all
+            </Link>
+          ) : null}
         </div>
         <BusinessTransactionList
           transactions={scopeActivity}

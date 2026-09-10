@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Bell, CheckCheck } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { useBusinessAuth } from '@/context/BusinessAuthContext';
 import { MOCK_NOTIFICATIONS } from '@/data/businessMocks';
 import type { BusinessNotification } from '@/types/business';
 
@@ -16,14 +17,39 @@ const typeStyles = {
 
 const PREVIEW_COUNT = 5;
 
+function normalizeType(type: string): BusinessNotification['type'] {
+  if (type === 'transaction' || type === 'wallet' || type === 'team' || type === 'system') {
+    return type;
+  }
+  return 'system';
+}
+
 export function BusinessNotificationsDropdown() {
+  const { dashboardBootstrap, isAuthenticated } = useBusinessAuth();
   const [open, setOpen] = useState(false);
-  const [notifications, setNotifications] = useState<BusinessNotification[]>(() =>
-    [...MOCK_NOTIFICATIONS].sort(
-      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-    ),
-  );
+  const [localReads, setLocalReads] = useState<Record<string, boolean>>({});
   const containerRef = useRef<HTMLDivElement>(null);
+
+  const notifications = useMemo(() => {
+    const source: BusinessNotification[] =
+      isAuthenticated && dashboardBootstrap?.notifications
+        ? dashboardBootstrap.notifications.map((row) => ({
+            id: row.id,
+            title: row.title,
+            message: row.message,
+            type: normalizeType(row.type),
+            read: Boolean(localReads[row.id] ?? row.read),
+            createdAt: row.createdAt || new Date().toISOString(),
+          }))
+        : MOCK_NOTIFICATIONS.map((row) => ({
+            ...row,
+            read: Boolean(localReads[row.id] ?? row.read),
+          }));
+
+    return [...source].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    );
+  }, [dashboardBootstrap?.notifications, isAuthenticated, localReads]);
 
   const preview = useMemo(() => notifications.slice(0, PREVIEW_COUNT), [notifications]);
   const unreadCount = useMemo(
@@ -53,17 +79,15 @@ export function BusinessNotificationsDropdown() {
   }, [open]);
 
   const markAsRead = (id: string) => {
-    setNotifications((current) =>
-      current.map((notification) =>
-        notification.id === id ? { ...notification, read: true } : notification,
-      ),
-    );
+    setLocalReads((current) => ({ ...current, [id]: true }));
   };
 
   const markAllAsRead = () => {
-    setNotifications((current) =>
-      current.map((notification) => ({ ...notification, read: true })),
-    );
+    const next: Record<string, boolean> = {};
+    for (const notification of notifications) {
+      next[notification.id] = true;
+    }
+    setLocalReads(next);
   };
 
   return (
@@ -93,9 +117,7 @@ export function BusinessNotificationsDropdown() {
             <div>
               <p className="text-sm font-semibold text-gray-900">Notifications</p>
               <p className="text-xs text-gray-500">
-                {unreadCount > 0
-                  ? `${unreadCount} unread`
-                  : 'You are all caught up'}
+                {unreadCount > 0 ? `${unreadCount} unread` : 'You are all caught up'}
               </p>
             </div>
             {unreadCount > 0 ? (
@@ -127,9 +149,7 @@ export function BusinessNotificationsDropdown() {
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
-                          <p className="text-sm font-semibold text-gray-900">
-                            {notification.title}
-                          </p>
+                          <p className="text-sm font-semibold text-gray-900">{notification.title}</p>
                           <span
                             className={cn(
                               'rounded-full px-2 py-0.5 text-[10px] font-medium capitalize',

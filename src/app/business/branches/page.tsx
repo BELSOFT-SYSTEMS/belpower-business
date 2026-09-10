@@ -16,6 +16,7 @@ import {
   getOperatingBranchesForRole,
   getTotalAllocatedBalance,
 } from '@/data/businessMocks';
+import { BusinessApiError, businessBranchesApi } from '@/lib/businessApi';
 import type { BusinessBranch } from '@/types/business';
 import { formatPrice } from '@/utils/formatPrice';
 import { cn } from '@/lib/utils';
@@ -27,28 +28,78 @@ import {
 const BRANCHES_PAGE_SIZE = 4;
 
 export default function BranchesPage() {
-  const { user, demoRole } = useBusinessAuth();
+  const { user, demoRole, isAuthenticated, refreshMe } = useBusinessAuth();
   const role = user?.role ?? demoRole;
   const isSuperAdmin = isSuperAdminRole(role);
-  const branchWallets = getMockBranchWalletOverviewForRole(role);
+  const mockBranchWallets = getMockBranchWalletOverviewForRole(role);
   const canViewBalances = canViewAllBranchWalletInfo(role);
 
   const [branches, setBranches] = useState<BusinessBranch[]>(() => getOperatingBranchesForRole(role));
+  const [walletByBranchId, setWalletByBranchId] = useState(
+    () => new Map(mockBranchWallets.map((branch) => [branch.branchId, branch.allocatedBalance])),
+  );
   const [addOpen, setAddOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<BusinessBranch | null>(null);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    setBranches(getOperatingBranchesForRole(role));
-    setMenuOpenId(null);
-    setDeleteTarget(null);
-  }, [role]);
+    if (!isAuthenticated) {
+      setBranches(getOperatingBranchesForRole(role));
+      setWalletByBranchId(
+        new Map(mockBranchWallets.map((branch) => [branch.branchId, branch.allocatedBalance])),
+      );
+      setMenuOpenId(null);
+      setDeleteTarget(null);
+      return;
+    }
 
-  const walletByBranchId = useMemo(
-    () => new Map(branchWallets.map((branch) => [branch.branchId, branch])),
-    [branchWallets],
-  );
+    let cancelled = false;
+    setLoading(true);
+    void (async () => {
+      try {
+        const rows = await businessBranchesApi.list();
+        if (cancelled) return;
+        const operating = rows
+          .filter((row) => !row.isHeadOffice)
+          .map((row) => ({
+            id: row.id,
+            name: row.name,
+            code: row.code || '',
+            address: row.address || '',
+            city: row.city || '',
+            isHeadOffice: false,
+            userCount: row.userCount ?? 0,
+            meterCount: row.meterCount ?? 0,
+            status: (row.status === 'inactive' ? 'inactive' : 'active') as BusinessBranch['status'],
+          }));
+        setBranches(operating);
+        setWalletByBranchId(
+          new Map(
+            rows
+              .filter((row) => row.wallet)
+              .map((row) => [
+                row.id,
+                Number(row.wallet?.availableBalance ?? row.wallet?.balance ?? 0),
+              ]),
+          ),
+        );
+      } catch (error) {
+        if (!cancelled) {
+          toast.error(
+            error instanceof BusinessApiError ? error.message : 'Could not load branches',
+          );
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated, role]);
 
   const filteredBranches = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -74,20 +125,24 @@ export default function BranchesPage() {
     const team = branches.reduce((sum, branch) => sum + branch.userCount, 0);
     const meters = branches.reduce((sum, branch) => sum + branch.meterCount, 0);
     const allocated = canViewBalances
-      ? getTotalAllocatedBalance()
-      : branches.reduce(
-          (sum, branch) => sum + (walletByBranchId.get(branch.id)?.allocatedBalance ?? 0),
-          0,
-        );
+      ? isAuthenticated
+        ? Array.from(walletByBranchId.values()).reduce((sum, value) => sum + value, 0)
+        : getTotalAllocatedBalance()
+      : branches.reduce((sum, branch) => sum + (walletByBranchId.get(branch.id) ?? 0), 0);
     const active = branches.filter((branch) => branch.status === 'active').length;
     return { team, meters, allocated, active };
-  }, [branches, canViewBalances, walletByBranchId]);
+  }, [branches, canViewBalances, isAuthenticated, walletByBranchId]);
 
-  const handleAddBranch = (branch: BusinessBranch) => {
+  const handleAddBranch = async (branch: BusinessBranch) => {
     if (!isSuperAdmin) return;
     setBranches((current) => [...current, branch]);
+    setWalletByBranchId((current) => new Map(current).set(branch.id, 0));
     setAddOpen(false);
-    toast.success(`${branch.name} added (demo)`);
+    try {
+      await refreshMe();
+    } catch {
+      // ignore
+    }
   };
 
   const handleToggleStatus = (branch: BusinessBranch) => {
@@ -249,17 +304,22 @@ export default function BranchesPage() {
                             label="Meters"
                             value={String(branch.meterCount)}
                           />
-                          {wallet || canViewBalances ? (
+                          {wallet !== undefined || canViewBalances ? (
                             <>
                               <MetaCell
                                 icon={<Wallet className="h-3.5 w-3.5" />}
                                 label={canViewBalances ? 'Allocated' : 'Balance'}
-                                value={formatPrice(wallet?.allocatedBalance ?? 0)}
+                                value={formatPrice(wallet ?? 0)}
                               />
-                              <MetaCell
-                                label="This month"
-                                value={formatPrice(wallet?.monthSpend ?? 0)}
-                              />
+                              {!isAuthenticated ? (
+                                <MetaCell
+                                  label="This month"
+                                  value={formatPrice(
+                                    mockBranchWallets.find((item) => item.branchId === branch.id)
+                                      ?.monthSpend ?? 0,
+                                  )}
+                                />
+                              ) : null}
                             </>
                           ) : null}
                         </div>

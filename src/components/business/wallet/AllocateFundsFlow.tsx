@@ -1,12 +1,13 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ArrowRightLeft, Check, Loader2, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { BusinessSelect } from '@/components/business/BusinessSelect';
 import { PageHeader } from '@/components/business/PageHeader';
 import { useBusinessAuth } from '@/context/BusinessAuthContext';
+import { canAllocateCompanyWallet } from '@/constants/businessRoles';
 import {
   getAllocatableBranchesForRole,
   getHeadOfficeCompanyBalance,
@@ -14,10 +15,11 @@ import {
   getTotalCompanyFunds,
   getUnallocatedCompanyBalance,
 } from '@/data/businessMocks';
+import { MIN_ALLOCATE_AMOUNT } from '@/data/mockAllocateFundsFlow';
 import {
-  MIN_ALLOCATE_AMOUNT,
-  mockSubmitAllocation,
-} from '@/data/mockAllocateFundsFlow';
+  BusinessApiError,
+  businessWalletApi,
+} from '@/lib/businessApi';
 import { formatPrice } from '@/utils/formatPrice';
 
 type FlowView = 'form' | 'success' | 'failed';
@@ -28,24 +30,74 @@ function parseAmount(value: string): number {
 }
 
 export function AllocateFundsFlow() {
-  const { user, demoRole } = useBusinessAuth();
+  const { user, demoRole, isAuthenticated, refreshMe, canAccess } = useBusinessAuth();
   const role = user?.role ?? demoRole;
-  const branches = getAllocatableBranchesForRole(role);
-  const companyAtHq = getHeadOfficeCompanyBalance();
-  const unallocated = getUnallocatedCompanyBalance();
-  const totalAllocated = getTotalAllocatedBalance();
-  const totalFunds = getTotalCompanyFunds();
+  const canAllocate = canAllocateCompanyWallet(role) && canAccess('wallet.allocate');
+
+  const mockBranches = getAllocatableBranchesForRole(role);
+  const [liveBranches, setLiveBranches] = useState<
+    Array<{ branchId: string; branchName: string; allocatedBalance: number }>
+  >([]);
+  const [companyAtHq, setCompanyAtHq] = useState(getHeadOfficeCompanyBalance());
+  const [unallocated, setUnallocated] = useState(getUnallocatedCompanyBalance());
+  const [totalAllocated, setTotalAllocated] = useState(getTotalAllocatedBalance());
+  const [totalFunds, setTotalFunds] = useState(getTotalCompanyFunds());
+  const [loadingOverview, setLoadingOverview] = useState(false);
 
   const [view, setView] = useState<FlowView>('form');
-  const [branchId, setBranchId] = useState(branches[0]?.branchId ?? '');
+  const [branchId, setBranchId] = useState('');
   const [amountInput, setAmountInput] = useState('');
   const [note, setNote] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [lastAllocation, setLastAllocation] = useState<{
     amount: number;
     branchName: string;
     reference: string;
   } | null>(null);
+
+  const branches = isAuthenticated && liveBranches.length >= 0 ? liveBranches : mockBranches;
+
+  useEffect(() => {
+    if (!isAuthenticated || !canAllocate) return;
+
+    let cancelled = false;
+    setLoadingOverview(true);
+    void (async () => {
+      try {
+        const overview = await businessWalletApi.overview();
+        if (cancelled) return;
+        setLiveBranches(
+          overview.allocatableBranches.map((branch) => ({
+            branchId: branch.branchId,
+            branchName: branch.branchName,
+            allocatedBalance: branch.allocatedBalance,
+          })),
+        );
+        setCompanyAtHq(overview.companyWallet?.availableBalance ?? 0);
+        setUnallocated(overview.unallocatedBalance);
+        setTotalAllocated(overview.totalAllocated);
+        setTotalFunds(
+          (overview.companyWallet?.availableBalance ?? 0) + overview.totalAllocated,
+        );
+        setBranchId((current) => current || overview.allocatableBranches[0]?.branchId || '');
+      } catch (error) {
+        if (!cancelled) {
+          toast.error(
+            error instanceof BusinessApiError
+              ? error.message
+              : 'Could not load wallet overview',
+          );
+        }
+      } finally {
+        if (!cancelled) setLoadingOverview(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [canAllocate, isAuthenticated, view]);
 
   const selectedBranch = useMemo(
     () => branches.find((branch) => branch.branchId === branchId),
@@ -61,11 +113,16 @@ export function AllocateFundsFlow() {
     setAmountInput('');
     setNote('');
     setLastAllocation(null);
+    setErrorMessage(null);
   };
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
 
+    if (!canAllocate) {
+      toast.error('You do not have permission to allocate funds');
+      return;
+    }
     if (!selectedBranch) {
       toast.error('Select a branch');
       return;
@@ -80,28 +137,58 @@ export function AllocateFundsFlow() {
     }
 
     setIsSubmitting(true);
+    setErrorMessage(null);
 
     try {
-      const result = await mockSubmitAllocation({
+      if (!isAuthenticated) {
+        throw new Error('Sign in required to allocate funds');
+      }
+
+      const result = await businessWalletApi.allocate({
         branchId: selectedBranch.branchId,
-        branchName: selectedBranch.branchName,
         amount,
         note: note.trim() || undefined,
       });
 
       setLastAllocation({
         amount,
-        branchName: selectedBranch.branchName,
+        branchName: result.branchName || selectedBranch.branchName,
         reference: result.reference,
       });
       setView('success');
       toast.success('Funds allocated successfully');
-    } catch {
+      try {
+        await refreshMe();
+      } catch {
+        // ignore bootstrap refresh errors after success
+      }
+    } catch (error) {
       setView('failed');
+      setErrorMessage(
+        error instanceof BusinessApiError
+          ? error.message
+          : error instanceof Error
+            ? error.message
+            : 'Allocation could not be completed',
+      );
       toast.error('Allocation could not be completed');
     } finally {
       setIsSubmitting(false);
     }
+  }
+
+  if (!canAllocate) {
+    return (
+      <div className="mx-auto max-w-6xl space-y-6">
+        <PageHeader
+          title="Allocate funds"
+          description="Move money from the Head Office company wallet into branch allocations."
+        />
+        <p className="rounded-xl border border-gray-200 bg-white p-6 text-sm text-gray-600 shadow-sm">
+          Your role cannot allocate company funds. Contact a Super Admin or HQ Finance user.
+        </p>
+      </div>
+    );
   }
 
   if (view === 'success' && lastAllocation) {
@@ -109,8 +196,8 @@ export function AllocateFundsFlow() {
       <div className="mx-auto max-w-6xl space-y-6">
         <PageHeader
           title="Allocate funds"
-        description="Move money from the Head Office company wallet into branch allocations."
-      />
+          description="Move money from the Head Office company wallet into branch allocations."
+        />
         <section className="rounded-xl border border-green-200 bg-green-50 p-8 text-center">
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full border-2 border-green-200 bg-white">
             <Check className="h-8 w-8 text-green-600" />
@@ -118,7 +205,7 @@ export function AllocateFundsFlow() {
           <h2 className="text-xl font-semibold text-gray-900">Allocation successful</h2>
           <p className="mt-2 text-sm text-gray-600">
             {formatPrice(lastAllocation.amount)} has been allocated to{' '}
-            <span className="font-medium text-gray-900">{lastAllocation.branchName}</span> (demo).
+            <span className="font-medium text-gray-900">{lastAllocation.branchName}</span>.
           </p>
           <p className="mt-1 text-xs text-gray-500">Reference: {lastAllocation.reference}</p>
           <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
@@ -146,15 +233,15 @@ export function AllocateFundsFlow() {
       <div className="mx-auto max-w-6xl space-y-6">
         <PageHeader
           title="Allocate funds"
-        description="Move money from the Head Office company wallet into branch allocations."
-      />
+          description="Move money from the Head Office company wallet into branch allocations."
+        />
         <section className="rounded-xl border border-gray-200 bg-white p-8 text-center shadow-sm">
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full border-2 border-red-200 bg-white">
             <XCircle className="h-8 w-8 text-red-600" />
           </div>
           <h2 className="text-xl font-semibold text-gray-900">Allocation failed</h2>
           <p className="mt-2 text-sm text-gray-600">
-            We could not complete this allocation. Check the amount and try again.
+            {errorMessage || 'We could not complete this allocation. Check the amount and try again.'}
           </p>
           <button
             type="button"
@@ -178,12 +265,8 @@ export function AllocateFundsFlow() {
       <div className="grid gap-4 sm:grid-cols-3">
         <div className="rounded-xl border border-green-200 bg-white p-4 shadow-sm">
           <p className="text-sm text-gray-500">Company wallet (Head Office)</p>
-          <p className="mt-1 text-xl font-semibold text-gray-900">
-            {formatPrice(companyAtHq)}
-          </p>
-          <p className="mt-1 text-xs text-gray-500">
-            Total company funds {formatPrice(totalFunds)}
-          </p>
+          <p className="mt-1 text-xl font-semibold text-gray-900">{formatPrice(companyAtHq)}</p>
+          <p className="mt-1 text-xs text-gray-500">Total company funds {formatPrice(totalFunds)}</p>
         </div>
         <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
           <p className="text-sm text-gray-500">Total allocated</p>
@@ -198,7 +281,7 @@ export function AllocateFundsFlow() {
       </div>
 
       <form
-        onSubmit={handleSubmit}
+        onSubmit={(event) => void handleSubmit(event)}
         className="space-y-6 rounded-xl border border-gray-200 bg-white p-6 shadow-sm"
       >
         <h2 className="text-lg font-semibold text-gray-900">New allocation</h2>
@@ -212,8 +295,8 @@ export function AllocateFundsFlow() {
             value={branchId}
             onChange={setBranchId}
             className="mt-1.5"
-            disabled={isSubmitting}
-            placeholder="Select a branch"
+            disabled={isSubmitting || loadingOverview}
+            placeholder={loadingOverview ? 'Loading branches…' : 'Select a branch'}
             options={branches.map((branch) => ({
               value: branch.branchId,
               label: `${branch.branchName} — current ${formatPrice(branch.allocatedBalance)}`,
@@ -272,6 +355,7 @@ export function AllocateFundsFlow() {
           type="submit"
           disabled={
             isSubmitting ||
+            loadingOverview ||
             !amount ||
             amount < MIN_ALLOCATE_AMOUNT ||
             amount > unallocated ||
@@ -292,10 +376,6 @@ export function AllocateFundsFlow() {
           )}
         </button>
       </form>
-
-      <p className="text-center text-xs text-gray-500">
-        Demo UI — allocations are not persisted until backend integration.
-      </p>
     </div>
   );
 }

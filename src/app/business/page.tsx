@@ -9,9 +9,15 @@ import { BranchSpendCarousel } from '@/components/business/BranchSpendCarousel';
 import { BusinessTransactionList } from '@/components/business/BusinessTransactionList';
 import { useBusinessAuth } from '@/context/BusinessAuthContext';
 import { getMockDashboardForRole, getWalletBalanceDisplayForRole } from '@/data/businessMocks';
+import { canViewCompanyWallet } from '@/constants/businessRoles';
 import { formatPrice } from '@/utils/formatPrice';
 import { formatAdminRoleLabel } from '@/utils/businessRoleDisplay';
-import type { BusinessRole } from '@/types/business';
+import type {
+  BranchMeter,
+  BusinessRole,
+  BusinessTransactionPreview,
+  BranchSpendItem,
+} from '@/types/business';
 
 const DEMO_ROLES: BusinessRole[] = [
   'super_admin',
@@ -46,18 +52,111 @@ function StatCard({
   );
 }
 
+function mapMeters(
+  meters: Array<{
+    id: string;
+    branchId: string;
+    branchName: string;
+    meterNumber: string;
+    disco: string | null;
+    meterType: string | null;
+    isHeadOffice?: boolean;
+  }> = [],
+): BranchMeter[] {
+  return meters.map((meter) => ({
+    id: meter.id,
+    branchId: meter.branchId,
+    branchName: meter.branchName,
+    meterNumber: meter.meterNumber,
+    disco: meter.disco || 'UNKNOWN',
+    meterType: meter.meterType === 'postpaid' ? 'postpaid' : 'prepaid',
+    isHeadOffice: Boolean(meter.isHeadOffice),
+  }));
+}
+
+function mapTransactions(
+  rows: Array<{
+    id: string;
+    reference: string;
+    service: string | null;
+    provider: string | null;
+    amount: number;
+    status: string;
+    entryType: 'credit' | 'debit';
+    branchName: string | null;
+    userName: string | null;
+    createdAt: string | null;
+  }> = [],
+): BusinessTransactionPreview[] {
+  return rows.map((tx) => ({
+    id: tx.id,
+    reference: tx.reference,
+    service: tx.service || 'payment',
+    provider: tx.provider || '—',
+    amount: tx.amount,
+    status:
+      tx.status === 'completed' || tx.status === 'pending' || tx.status === 'failed'
+        ? tx.status
+        : 'pending',
+    entryType: tx.entryType,
+    branchName: tx.branchName || '—',
+    userName: tx.userName || '—',
+    createdAt: tx.createdAt || new Date().toISOString(),
+  }));
+}
+
 export default function BusinessDashboardPage() {
-  const { user, isSuperAdmin, demoRole, setDemoRole, canAccess } = useBusinessAuth();
+  const {
+    user,
+    isSuperAdmin,
+    demoRole,
+    setDemoRole,
+    canAccess,
+    dashboardBootstrap,
+    isAuthenticated,
+  } = useBusinessAuth();
 
-  const dashboard = useMemo(
-    () => getMockDashboardForRole(user?.role ?? demoRole),
-    [user?.role, demoRole]
-  );
+  const role = user?.role ?? demoRole;
+  const useLive = Boolean(isAuthenticated && dashboardBootstrap);
 
-  const walletDisplay = useMemo(
-    () => getWalletBalanceDisplayForRole(user?.role ?? demoRole),
-    [user?.role, demoRole]
-  );
+  const mockDashboard = useMemo(() => getMockDashboardForRole(role), [role]);
+  const mockWalletDisplay = useMemo(() => getWalletBalanceDisplayForRole(role), [role]);
+
+  const walletLabel = useLive
+    ? canViewCompanyWallet(role)
+      ? 'Company wallet (Head Office)'
+      : 'Branch wallet balance'
+    : mockWalletDisplay.label;
+
+  const walletBalance = useLive
+    ? Number(dashboardBootstrap?.wallet?.availableBalance ?? dashboardBootstrap?.wallet?.balance ?? 0)
+    : mockWalletDisplay.balance;
+
+  const todaySpend = useLive
+    ? Number(dashboardBootstrap?.stats?.todaySpend ?? dashboardBootstrap?.wallet?.todaySpend ?? 0)
+    : mockDashboard.wallet.todaySpend;
+
+  const monthSpend = useLive
+    ? Number(dashboardBootstrap?.stats?.monthSpend ?? dashboardBootstrap?.wallet?.monthSpend ?? 0)
+    : mockDashboard.wallet.monthSpend;
+
+  const activeBranches = useLive
+    ? Number(dashboardBootstrap?.stats?.activeBranches ?? dashboardBootstrap?.branches?.length ?? 0)
+    : mockDashboard.branchSpend.length;
+
+  const meters = useLive ? mapMeters(dashboardBootstrap?.meters) : mockDashboard.meters;
+
+  const recentTransactions = useLive
+    ? mapTransactions(dashboardBootstrap?.recentTransactions)
+    : mockDashboard.recentTransactions;
+
+  const branchSpend: BranchSpendItem[] = useLive
+    ? (dashboardBootstrap?.branchSpend || []).map((row) => ({
+        branchId: row.branchId,
+        branchName: row.branchName,
+        amount: row.amount,
+      }))
+    : mockDashboard.branchSpend;
 
   const greetingName = user?.firstName ?? 'there';
 
@@ -70,20 +169,18 @@ export default function BusinessDashboardPage() {
           <p className="mt-1 text-sm text-gray-600">What would you like to do today?</p>
         </div>
 
-        {process.env.NODE_ENV === 'development' && (
+        {process.env.NODE_ENV === 'development' && !isAuthenticated && (
           <div className="flex flex-wrap gap-2">
-            {DEMO_ROLES.map((role) => (
+            {DEMO_ROLES.map((demo) => (
               <button
-                key={role}
+                key={demo}
                 type="button"
-                onClick={() => setDemoRole(role)}
+                onClick={() => setDemoRole(demo)}
                 className={`rounded-full px-3 py-1 text-xs font-medium ${
-                  (user?.role ?? demoRole) === role
-                    ? 'bg-blue-normal text-white'
-                    : 'bg-gray-100 text-gray-700'
+                  role === demo ? 'bg-blue-normal text-white' : 'bg-gray-100 text-gray-700'
                 }`}
               >
-                {formatAdminRoleLabel(role)}
+                {formatAdminRoleLabel(demo)}
               </button>
             ))}
           </div>
@@ -92,26 +189,26 @@ export default function BusinessDashboardPage() {
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
-          label={walletDisplay.label}
-          value={formatPrice(walletDisplay.balance)}
+          label={walletLabel}
+          value={formatPrice(walletBalance)}
           icon={<Wallet className="h-5 w-5" />}
           borderClass="border-green-200"
         />
         <StatCard
           label="Today's spend"
-          value={formatPrice(dashboard.wallet.todaySpend)}
+          value={formatPrice(todaySpend)}
           icon={<TrendingUp className="h-5 w-5" />}
           borderClass="border-blue-200"
         />
         <StatCard
           label="This month"
-          value={formatPrice(dashboard.wallet.monthSpend)}
+          value={formatPrice(monthSpend)}
           icon={<Clock className="h-5 w-5" />}
           borderClass="border-purple-200"
         />
         <StatCard
           label="Active branches"
-          value={String(dashboard.branchSpend.length)}
+          value={String(activeBranches)}
           icon={<Building2 className="h-5 w-5" />}
           borderClass="border-amber-200"
         />
@@ -120,9 +217,9 @@ export default function BusinessDashboardPage() {
       <div className="grid gap-6 xl:grid-cols-2 xl:items-stretch">
         <div className="flex min-h-0 w-full min-w-0 flex-col">
           <DigitalMeterDisplay
-            meters={dashboard.meters}
-            walletBalance={walletDisplay.balance}
-            allowSwipe={isSuperAdmin}
+            meters={meters}
+            walletBalance={walletBalance}
+            allowSwipe={isSuperAdmin || canViewCompanyWallet(role)}
           />
         </div>
 
@@ -132,23 +229,43 @@ export default function BusinessDashboardPage() {
           </div>
           <div className="flex flex-1 items-center">
             {canAccess('payments.single') ? (
-            <div className="grid w-full grid-cols-2 gap-3 sm:grid-cols-4">
-            {[
-              { name: 'Airtime', href: '/business/payments/airtime', emoji: '/airtime.png', color: 'bg-green-50' },
-              { name: 'Data', href: '/business/payments/data', emoji: '/data.png', color: 'bg-pink-50' },
-              { name: 'Electricity', href: '/business/payments/electricity', emoji: '/electricity.png', color: 'bg-purple-50' },
-              { name: 'Cable TV', href: '/business/payments/cable', emoji: '/Tv.png', color: 'bg-yellow-50' },
-            ].map((action) => (
-              <Link
-                key={action.href}
-                href={action.href}
-                className={`${action.color} flex flex-col items-center gap-2 rounded-xl border border-gray-100 p-4 transition hover:shadow-md`}
-              >
-                <Image src={action.emoji} alt={action.name} width={40} height={40} />
-                <span className="text-sm font-medium text-gray-800">{action.name}</span>
-              </Link>
-            ))}
-            </div>
+              <div className="grid w-full grid-cols-2 gap-3 sm:grid-cols-4">
+                {[
+                  {
+                    name: 'Airtime',
+                    href: '/business/payments/airtime',
+                    emoji: '/airtime.png',
+                    color: 'bg-green-50',
+                  },
+                  {
+                    name: 'Data',
+                    href: '/business/payments/data',
+                    emoji: '/data.png',
+                    color: 'bg-pink-50',
+                  },
+                  {
+                    name: 'Electricity',
+                    href: '/business/payments/electricity',
+                    emoji: '/electricity.png',
+                    color: 'bg-purple-50',
+                  },
+                  {
+                    name: 'Cable TV',
+                    href: '/business/payments/cable',
+                    emoji: '/Tv.png',
+                    color: 'bg-yellow-50',
+                  },
+                ].map((action) => (
+                  <Link
+                    key={action.href}
+                    href={action.href}
+                    className={`${action.color} flex flex-col items-center gap-2 rounded-xl border border-gray-100 p-4 transition hover:shadow-md`}
+                  >
+                    <Image src={action.emoji} alt={action.name} width={40} height={40} />
+                    <span className="text-sm font-medium text-gray-800">{action.name}</span>
+                  </Link>
+                ))}
+              </div>
             ) : (
               <p className="w-full text-center text-sm text-gray-500">
                 Payment shortcuts are not available for your role.
@@ -161,16 +278,21 @@ export default function BusinessDashboardPage() {
       <section className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold text-gray-900">Recent transactions</h2>
-          <Link href="/business/transactions" className="text-sm font-medium text-blue-normal hover:underline">
-            View all
-          </Link>
+          {canAccess('transactions.view') ? (
+            <Link
+              href="/business/transactions"
+              className="text-sm font-medium text-blue-normal hover:underline"
+            >
+              View all
+            </Link>
+          ) : null}
         </div>
-        <BusinessTransactionList transactions={dashboard.recentTransactions} />
+        <BusinessTransactionList transactions={recentTransactions} />
       </section>
 
-      {isSuperAdmin && (
+      {(isSuperAdmin || canViewCompanyWallet(role)) && (
         <section className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-          <BranchSpendCarousel role={user?.role ?? demoRole} />
+          <BranchSpendCarousel role={role} items={useLive ? branchSpend : undefined} />
         </section>
       )}
     </div>

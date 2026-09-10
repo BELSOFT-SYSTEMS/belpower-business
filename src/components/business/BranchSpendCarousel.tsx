@@ -16,6 +16,8 @@ const SPEND_PERIOD_OPTIONS: { value: BranchSpendPeriod; label: string }[] = [
 
 type BranchSpendCarouselProps = {
   role: BusinessRole;
+  /** When provided (live API), used instead of mock period data for the default month view. */
+  items?: BranchSpendItem[];
 };
 
 const SCROLL_SPEED = 0.75;
@@ -32,12 +34,16 @@ function BranchSpendCard({ branch }: { branch: BranchSpendItem }) {
   );
 }
 
-export function BranchSpendCarousel({ role }: BranchSpendCarouselProps) {
+export function BranchSpendCarousel({ role, items }: BranchSpendCarouselProps) {
   const [period, setPeriod] = useState<BranchSpendPeriod>('30d');
-  const branches = useMemo(
-    () => getMockBranchSpendForPeriod(period, role),
-    [period, role],
-  );
+  const branches = useMemo(() => {
+    if (items && period === '30d') return items;
+    if (items && period !== '30d') {
+      // Live bootstrap currently ships month spend only; keep that list for other period toggles.
+      return items;
+    }
+    return getMockBranchSpendForPeriod(period, role);
+  }, [items, period, role]);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const trackRef = useRef<HTMLUListElement>(null);

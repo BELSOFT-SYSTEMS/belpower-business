@@ -8,10 +8,14 @@ import { fieldClass } from '@/components/business/payments/paymentShared';
 import {
   ELECTRICITY_DISCOS,
   getProviderName,
-  mockLookupMeter,
   resolveDiscoCode,
   type MeterType,
 } from '@/data/mockPaymentCatalog';
+import {
+  BusinessApiError,
+  businessAuthApi,
+  businessBranchesApi,
+} from '@/lib/businessApi';
 import type { BusinessBranch } from '@/types/business';
 import { cn } from '@/lib/utils';
 
@@ -32,7 +36,9 @@ export function AddBranchModal({ open, onClose, onAdd }: AddBranchModalProps) {
   const [meterNumber, setMeterNumber] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [verifiedAddress, setVerifiedAddress] = useState('');
+  const [verificationId, setVerificationId] = useState<string | null>(null);
   const [lookingUp, setLookingUp] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [verifyError, setVerifyError] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
@@ -73,6 +79,7 @@ export function AddBranchModal({ open, onClose, onAdd }: AddBranchModalProps) {
     setVerifiedAddress('');
     setLookingUp(false);
     setVerifyError(null);
+    setVerificationId(null);
     setName('');
     setCode('');
     setCity('');
@@ -95,19 +102,37 @@ export function AddBranchModal({ open, onClose, onAdd }: AddBranchModalProps) {
     setVerifyError(null);
     setCustomerName('');
     setVerifiedAddress('');
+    setVerificationId(null);
 
     void (async () => {
       try {
-        const next = await mockLookupMeter(digits, disco, meterType);
+        const result = await businessAuthApi.verifyMeter({
+          meter: digits,
+          disco: resolveDiscoCode(disco),
+          vendType: meterType.toUpperCase(),
+        });
         if (requestId !== verifyRequestRef.current) return;
-        setCustomerName(next.customerName);
-        setVerifiedAddress(next.address);
+        const data = result.data || {};
+        const nextName =
+          data.name || data.customer_name || 'Verified customer';
+        const nextAddress =
+          data.address || data.CustomerAddress || 'Address from meter verification';
+        setCustomerName(nextName);
+        setVerifiedAddress(nextAddress);
+        setVerificationId(result.verification_id);
         setVerifyError(null);
       } catch (error) {
         if (requestId !== verifyRequestRef.current) return;
         setCustomerName('');
         setVerifiedAddress('');
-        setVerifyError(error instanceof Error ? error.message : 'Could not verify meter');
+        setVerificationId(null);
+        setVerifyError(
+          error instanceof BusinessApiError
+            ? error.message
+            : error instanceof Error
+              ? error.message
+              : 'Could not verify meter',
+        );
       } finally {
         if (requestId === verifyRequestRef.current) setLookingUp(false);
       }
@@ -117,6 +142,7 @@ export function AddBranchModal({ open, onClose, onAdd }: AddBranchModalProps) {
   const clearMeterLookup = () => {
     setCustomerName('');
     setVerifiedAddress('');
+    setVerificationId(null);
     setVerifyError(null);
   };
 
@@ -154,30 +180,52 @@ export function AddBranchModal({ open, onClose, onAdd }: AddBranchModalProps) {
     setStep(3);
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (step !== 3) return;
 
     const trimmedName = name.trim();
     const trimmedCode = code.trim().toUpperCase();
     const trimmedCity = city.trim();
 
-    if (!trimmedName || !trimmedCode || !trimmedCity || !verifiedAddress) {
+    if (!trimmedName || !trimmedCode || !trimmedCity || !verifiedAddress || !verificationId) {
       toast.error('Complete all branch details before adding');
       setStep(2);
       return;
     }
 
-    onAdd({
-      id: `branch-${Date.now()}`,
-      name: trimmedName,
-      code: trimmedCode,
-      address: verifiedAddress,
-      city: trimmedCity,
-      isHeadOffice: false,
-      userCount: 0,
-      meterCount: 1,
-      status: 'active',
-    });
+    setSubmitting(true);
+    try {
+      const created = await businessBranchesApi.create({
+        name: trimmedName,
+        code: trimmedCode,
+        city: trimmedCity,
+        address: verifiedAddress,
+        verificationId,
+      });
+
+      onAdd({
+        id: created.id,
+        name: created.name,
+        code: created.code || trimmedCode,
+        address: created.address || verifiedAddress,
+        city: created.city || trimmedCity,
+        isHeadOffice: Boolean(created.isHeadOffice),
+        userCount: created.userCount ?? 0,
+        meterCount: created.meterCount ?? 1,
+        status: created.status === 'inactive' ? 'inactive' : 'active',
+      });
+      toast.success(`${created.name} added`);
+    } catch (error) {
+      toast.error(
+        error instanceof BusinessApiError
+          ? error.message
+          : error instanceof Error
+            ? error.message
+            : 'Could not create branch',
+      );
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   if (!open) return null;
@@ -446,10 +494,11 @@ export function AddBranchModal({ open, onClose, onAdd }: AddBranchModalProps) {
                 </button>
                 <button
                   type="button"
-                  onClick={handleSubmit}
-                  className="rounded-xl bg-blue-normal px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-normal-hover"
+                  onClick={() => void handleSubmit()}
+                  disabled={submitting}
+                  className="rounded-xl bg-blue-normal px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-normal-hover disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  Add branch
+                  {submitting ? 'Adding…' : 'Add branch'}
                 </button>
               </div>
             </div>
