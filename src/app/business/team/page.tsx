@@ -34,8 +34,38 @@ export default function TeamPage() {
   const [branches, setBranches] = useState<BusinessBranch[]>([]);
   const [loading, setLoading] = useState(true);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
+  const [menuPosition, setMenuPosition] = useState<{ top: number; right: number } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<BusinessTeamMember | null>(null);
   const [suspendTarget, setSuspendTarget] = useState<BusinessTeamMember | null>(null);
+
+  useEffect(() => {
+    if (!menuOpenId) return;
+
+    const close = () => {
+      setMenuOpenId(null);
+      setMenuPosition(null);
+    };
+    const onPointerDown = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest('[data-team-actions-menu]') || target?.closest('[data-team-actions-trigger]')) {
+        return;
+      }
+      close();
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') close();
+    };
+    const onScroll = () => close();
+
+    window.addEventListener('mousedown', onPointerDown);
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('scroll', onScroll, true);
+    return () => {
+      window.removeEventListener('mousedown', onPointerDown);
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('scroll', onScroll, true);
+    };
+  }, [menuOpenId]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -135,8 +165,12 @@ export default function TeamPage() {
       setInviteOpen(false);
       resetInviteForm();
       toast.success(`Invitation sent to ${email}`);
-      if (result.inviteUrl) {
-        toast.message(`Invite link: ${result.inviteUrl}`);
+      // Only surface the raw link if Resend failed — otherwise email is enough.
+      if (result.emailSent === false && result.inviteUrl) {
+        toast.message('Email could not be sent. Copy this invite link:', {
+          description: result.inviteUrl,
+          duration: 20000,
+        });
       }
       await load();
     } catch (error) {
@@ -159,6 +193,7 @@ export default function TeamPage() {
       await businessTeamApi.remove(deleteTarget.id);
       setDeleteTarget(null);
       setMenuOpenId(null);
+      setMenuPosition(null);
       toast.success(`${name} removed from team`);
       await load();
     } catch (error) {
@@ -234,7 +269,7 @@ export default function TeamPage() {
           }
         />
       ) : (
-        <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+        <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
           <div className="overflow-x-auto">
             <table className="min-w-full text-left text-sm">
               <thead className="border-b border-gray-200 bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
@@ -286,23 +321,42 @@ export default function TeamPage() {
                             <div className="relative inline-flex justify-end">
                               <button
                                 type="button"
-                                onClick={() =>
-                                  setMenuOpenId((current) =>
-                                    current === member.id ? null : member.id,
-                                  )
-                                }
+                                data-team-actions-trigger
+                                onClick={(event) => {
+                                  const rect = event.currentTarget.getBoundingClientRect();
+                                  setMenuOpenId((current) => {
+                                    if (current === member.id) {
+                                      setMenuPosition(null);
+                                      return null;
+                                    }
+                                    setMenuPosition({
+                                      top: rect.bottom + 4,
+                                      right: Math.max(8, window.innerWidth - rect.right),
+                                    });
+                                    return member.id;
+                                  });
+                                }}
                                 className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-800"
                                 aria-label={`${member.firstName} ${member.lastName} actions`}
+                                aria-expanded={menuOpenId === member.id}
                               >
                                 <MoreVertical className="h-4 w-4" />
                               </button>
-                              {menuOpenId === member.id ? (
-                                <div className="absolute right-0 top-full z-20 mt-1 w-44 rounded-xl border border-gray-200 bg-white py-1 shadow-lg">
+                              {menuOpenId === member.id && menuPosition ? (
+                                <div
+                                  data-team-actions-menu
+                                  className="fixed z-50 w-44 rounded-xl border border-gray-200 bg-white py-1 shadow-lg"
+                                  style={{
+                                    top: menuPosition.top,
+                                    right: menuPosition.right,
+                                  }}
+                                >
                                   {canSuspend ? (
                                     <button
                                       type="button"
                                       onClick={() => {
                                         setMenuOpenId(null);
+                                        setMenuPosition(null);
                                         setSuspendTarget(member);
                                       }}
                                       className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
@@ -315,6 +369,7 @@ export default function TeamPage() {
                                       type="button"
                                       onClick={() => {
                                         setMenuOpenId(null);
+                                        setMenuPosition(null);
                                         setDeleteTarget(member);
                                       }}
                                       className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50"

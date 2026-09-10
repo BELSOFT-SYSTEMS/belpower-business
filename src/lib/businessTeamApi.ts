@@ -26,7 +26,12 @@ export const businessTeamApi = {
   },
 
   invite(payload: InviteTeamPayload) {
-    return businessApiRequest<{ member: BusinessTeamMember; inviteUrl: string }>('/team/invite', {
+    return businessApiRequest<{
+      member: BusinessTeamMember;
+      inviteUrl: string;
+      emailSent?: boolean;
+      emailError?: string;
+    }>('/team/invite', {
       method: 'POST',
       auth: true,
       body: JSON.stringify(payload),
