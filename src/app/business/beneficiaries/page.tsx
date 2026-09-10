@@ -107,14 +107,31 @@ const SERVICE_TABS: {
 ];
 
 export default function BeneficiariesPage() {
-  const { user, demoRole, canAccess } = useBusinessAuth();
+  const { user, demoRole, canAccess, isAuthenticated, dashboardBootstrap } = useBusinessAuth();
   const role = user?.role ?? demoRole;
-  const branches = getMockBranchesForRole(role);
+  const branches = useMemo(() => {
+    if (isAuthenticated) {
+      const liveBranches = (dashboardBootstrap?.branches || []) as Array<{
+        id?: string;
+        name?: string;
+      }>;
+      return liveBranches
+        .filter((branch) => branch.name)
+        .map((branch) => ({
+          id: String(branch.id || branch.name),
+          name: String(branch.name),
+        }));
+    }
+    return getMockBranchesForRole(role);
+  }, [dashboardBootstrap?.branches, isAuthenticated, role]);
 
   const [service, setService] = useState<BeneficiaryService>('electricity');
-  const [items, setItems] = useState(() => getMockBeneficiariesForRole(role));
-  const [groups, setGroups] = useState(() => getMockBeneficiaryGroupsForRole(role));
-  const [isAdding, setIsAdding] = useState(false);
+  const [items, setItems] = useState<BusinessBeneficiary[]>(() =>
+    isAuthenticated ? [] : getMockBeneficiariesForRole(role),
+  );
+  const [groups, setGroups] = useState<BeneficiaryGroup[]>(() =>
+    isAuthenticated ? [] : getMockBeneficiaryGroupsForRole(role),
+  );  const [isAdding, setIsAdding] = useState(false);
   const [addMode, setAddMode] = useState<AddMode>('single');
   const [phoneSubTab, setPhoneSubTab] = useState<PhoneSubTab>('groups');
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
@@ -140,6 +157,12 @@ export default function BeneficiariesPage() {
   const [verifyError, setVerifyError] = useState<string | null>(null);
   const verifyRequestRef = useRef(0);
   const addFormRef = useRef<HTMLFormElement | null>(null);
+
+  useEffect(() => {
+    if (!branchName && branches[0]?.name) {
+      setBranchName(branches[0].name);
+    }
+  }, [branchName, branches]);
 
   const tab = SERVICE_TABS.find((item) => item.id === service) ?? SERVICE_TABS[0];
   const serviceItems = useMemo(() => {
@@ -180,9 +203,47 @@ export default function BeneficiariesPage() {
   };
 
   useEffect(() => {
+    if (isAuthenticated) {
+      const live = (dashboardBootstrap?.beneficiaries || []) as Array<Record<string, unknown>>;
+      setItems(
+        live.map((row) => {
+          const serviceRaw = String(row.service || 'electricity');
+          const serviceValue: BusinessBeneficiary['service'] =
+            serviceRaw === 'phone' ||
+            serviceRaw === 'cable' ||
+            serviceRaw === 'airtime' ||
+            serviceRaw === 'data' ||
+            serviceRaw === 'electricity'
+              ? serviceRaw
+              : 'electricity';
+          const meterType =
+            row.meterType === 'postpaid' || row.meterType === 'prepaid'
+              ? row.meterType
+              : undefined;
+
+          return {
+            id: String(row.id),
+            label: String(row.label || 'Beneficiary'),
+            service: serviceValue,
+            provider: String(row.provider || ''),
+            accountNumber: String(row.accountNumber || ''),
+            branchName: String(row.branchName || '—'),
+            createdAt: String(row.createdAt || new Date().toISOString()),
+            meterType,
+            customerName: row.customerName ? String(row.customerName) : undefined,
+            address: row.address ? String(row.address) : undefined,
+            isPrimary: Boolean(row.isPrimary),
+            verified: Boolean(row.verified),
+          };
+        }),
+      );
+      setGroups([]);
+      return;
+    }
+
     setItems(getMockBeneficiariesForRole(role));
     setGroups(getMockBeneficiaryGroupsForRole(role));
-  }, [role]);
+  }, [dashboardBootstrap?.beneficiaries, isAuthenticated, role]);
 
   useEffect(() => {
     setIsAdding(false);

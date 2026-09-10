@@ -102,7 +102,7 @@ export default function WalletPage() {
     };
   }, [canViewCompanyWallet, isAuthenticated]);
 
-  const scopeOptions = liveScopes ?? mockScopeOptions;
+  const scopeOptions = isAuthenticated ? liveScopes ?? [] : mockScopeOptions;
 
   useEffect(() => {
     const roleChanged = previousRoleRef.current !== role;
@@ -134,7 +134,8 @@ export default function WalletPage() {
 
   const viewingHeadOffice = isHeadOfficeWalletScope(selectedScope?.branchId);
   const isFrozen = Boolean(
-    (selectedScope as LiveScope | undefined)?.isFrozen ?? mockDashboard.wallet.isFrozen,
+    (selectedScope as LiveScope | undefined)?.isFrozen ??
+      (isAuthenticated ? false : mockDashboard.wallet.isFrozen),
   );
 
   const balanceLabel = viewingHeadOffice
@@ -173,7 +174,7 @@ export default function WalletPage() {
 
   const scopeActivity = useMemo(() => {
     if (!selectedScope) return [];
-    const source = liveScopes ? liveTransactions : mockTransactions;
+    const source = isAuthenticated ? liveTransactions : mockTransactions;
     if (viewingHeadOffice) {
       return source
         .filter(
@@ -188,7 +189,7 @@ export default function WalletPage() {
     return source
       .filter((tx) => tx.branchName === selectedScope.branchName)
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  }, [liveScopes, liveTransactions, mockTransactions, selectedScope, viewingHeadOffice]);
+  }, [isAuthenticated, liveTransactions, mockTransactions, selectedScope, viewingHeadOffice]);
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">

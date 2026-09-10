@@ -1,7 +1,7 @@
 'use client';
 
-import Image from 'next/image';
 import { LogOut, Menu } from 'lucide-react';
+import { BusinessAvatar } from '@/components/business/BusinessAvatar';
 import { BusinessNotificationsDropdown } from '@/components/business/BusinessNotificationsDropdown';
 import { useBusinessAuth } from '@/context/BusinessAuthContext';
 import { formatAdminRoleLabel } from '@/utils/businessRoleDisplay';
@@ -26,15 +26,14 @@ export function BusinessTopBar({ onMenuClick }: BusinessTopBarProps) {
             <Menu className="h-5 w-5" />
           </button>
 
-          {business && (
-            <Image
-              src={business.logoUrl ?? '/belsoft-logo-2.jpg'}
-              alt={business.businessName}
-              width={36}
-              height={36}
-              className="rounded-lg border border-gray-200 bg-white object-contain p-1"
+          {business ? (
+            <BusinessAvatar
+              name={business.businessName}
+              logoUrl={business.logoUrl}
+              size={36}
+              className="shrink-0"
             />
-          )}
+          ) : null}
 
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold text-gray-900">{business?.businessName}</p>

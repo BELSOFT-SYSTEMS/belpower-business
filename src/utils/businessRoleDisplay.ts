@@ -12,8 +12,9 @@ const ROLE_LABELS: Record<BusinessRole, string> = {
   branch_viewer: 'Viewer (Branch)',
 };
 
-export function formatAdminRoleLabel(role: BusinessRole): string {
-  return ROLE_LABELS[role] ?? role;
+export function formatAdminRoleLabel(role: BusinessRole | string | null | undefined): string {
+  if (!role) return '—';
+  return ROLE_LABELS[role as BusinessRole] ?? String(role).replace(/_/g, ' ');
 }
 
 export function formatRoleScopeLabel(role: BusinessRole): string {

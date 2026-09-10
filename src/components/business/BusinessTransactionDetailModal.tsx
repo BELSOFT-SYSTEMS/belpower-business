@@ -1,12 +1,14 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { Copy, Download, RotateCw, Repeat2, X } from 'lucide-react';
 import { toast } from 'sonner';
 import type { BusinessTransactionDetail } from '@/types/businessTransactionDetail';
 import { getMockTransactionDetailById } from '@/data/mockTransactionDetails';
+import { BusinessApiError, businessTransactionsApi } from '@/lib/businessApi';
+import { useBusinessAuth } from '@/context/BusinessAuthContext';
 import { getDiscoDisplayName } from '@/constants/discoNames';
 import {
   getCableBillingFromTransaction,
@@ -116,20 +118,88 @@ function getProviderLabel(transaction: BusinessTransactionDetail) {
   return telcoMap[provider] || transaction.provider.toUpperCase();
 }
 
+function mapApiTransactionToDetail(
+  row: Awaited<ReturnType<typeof businessTransactionsApi.get>>,
+): BusinessTransactionDetail {
+  const metadata = (row.metadata || {}) as BusinessTransactionDetail['metadata'];
+  const amount = Number(row.amount || 0);
+  return {
+    id: row.id,
+    reference: row.reference,
+    order_id: row.detail?.orderId || row.reference,
+    receipt_number: row.reference,
+    type: row.service,
+    status: row.status,
+    payment_method: row.paymentMethod || 'wallet',
+    payment_type: row.service,
+    amount_paid: amount,
+    service_charge: 0,
+    discount: 0,
+    total_amount: amount,
+    amount,
+    created_at: row.createdAt || new Date().toISOString(),
+    completed_at: row.completedAt || null,
+    is_scheduled: false,
+    scheduled_info: null,
+    service: row.service || 'payment',
+    provider: row.provider || '—',
+    description: row.detail?.description || row.note || undefined,
+    fullName: row.userName || '—',
+    email: '',
+    phoneNumber: '',
+    branchName: row.branchName || '—',
+    userName: row.userName || '—',
+    entryType: row.entryType,
+    metadata,
+  };
+}
+
 export function BusinessTransactionDetailModal({
   transactionId,
   open,
   onClose,
 }: BusinessTransactionDetailModalProps) {
   const router = useRouter();
+  const { isAuthenticated } = useBusinessAuth();
   const [copiedToken, setCopiedToken] = useState(false);
   const [downloadingReceipt, setDownloadingReceipt] = useState(false);
   const [isRequerying, setIsRequerying] = useState(false);
+  const [transaction, setTransaction] = useState<BusinessTransactionDetail | null>(null);
+  const [loadingDetail, setLoadingDetail] = useState(false);
 
-  const transaction = useMemo(
-    () => (transactionId ? getMockTransactionDetailById(transactionId) : null),
-    [transactionId],
-  );
+  useEffect(() => {
+    if (!open || !transactionId) {
+      setTransaction(null);
+      return;
+    }
+
+    if (!isAuthenticated) {
+      setTransaction(getMockTransactionDetailById(transactionId));
+      return;
+    }
+
+    let cancelled = false;
+    setLoadingDetail(true);
+    void (async () => {
+      try {
+        const row = await businessTransactionsApi.get(transactionId);
+        if (!cancelled) setTransaction(mapApiTransactionToDetail(row));
+      } catch (error) {
+        if (!cancelled) {
+          setTransaction(null);
+          toast.error(
+            error instanceof BusinessApiError ? error.message : 'Could not load transaction',
+          );
+        }
+      } finally {
+        if (!cancelled) setLoadingDetail(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated, open, transactionId]);
 
   useEffect(() => {
     if (!open) return;
@@ -243,7 +313,11 @@ export function BusinessTransactionDetailModal({
             </h2>
             {transaction ? (
               <p className="mt-0.5 truncate text-xs text-gray-500">{transaction.reference}</p>
-            ) : null}
+            ) : loadingDetail ? (
+              <p className="mt-0.5 text-xs text-gray-500">Loading…</p>
+            ) : (
+              <p className="mt-0.5 text-xs text-gray-500">Transaction not found</p>
+            )}
           </div>
           <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
             {transaction && transactionStatus === 'completed' ? (

@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { format, parseISO } from 'date-fns';
 import { Download } from 'lucide-react';
 import { toast } from 'sonner';
@@ -18,11 +18,12 @@ import {
   getMockWalletStatementsForRole,
   getWalletBalanceDisplayForRole,
 } from '@/data/businessMocks';
+import { BusinessApiError, businessWalletApi } from '@/lib/businessApi';
 import type { WalletStatementRow } from '@/types/business';
 import { formatAdminRoleLabel } from '@/utils/businessRoleDisplay';
 import { formatPrice } from '@/utils/formatPrice';
 
-const ALL_BRANCHES = 'all';
+const ALL_WALLETS = 'all';
 
 function getStatementDateKey(row: WalletStatementRow): string {
   return format(parseISO(row.createdAt), 'yyyy-MM-dd');
@@ -36,36 +37,135 @@ function isCountableDebit(row: WalletStatementRow): boolean {
   return row.type === 'debit' && row.status === 'completed';
 }
 
+type LiveWalletOption = {
+  id: string;
+  label: string;
+  balance: number;
+  branchName: string | null;
+  isFrozen?: boolean;
+};
+
 export function WalletStatementsFlow() {
-  const { user, demoRole, canAccess } = useBusinessAuth();
+  const { user, demoRole, canAccess, isAuthenticated } = useBusinessAuth();
   const role = user?.role ?? demoRole;
-  const allStatements = getMockWalletStatementsForRole(role);
-  const branchOptions = getMockStatementBranchFilterOptions(role);
-  const walletDisplay = getWalletBalanceDisplayForRole(role);
-  const dashboard = getMockDashboardForRole(role);
-  const branchOverview = getMockBranchWalletOverviewForRole(role);
-
-  const [branchFilter, setBranchFilter] = useState(ALL_BRANCHES);
-  const [dateFilter, setDateFilter] = useState<string | null>(null);
-
   const canExport = canAccess('transactions.export');
   const isBranchUser = isBranchScopedRole(role);
+
+  const mockStatements = useMemo(() => getMockWalletStatementsForRole(role), [role]);
+  const mockBranchOptions = useMemo(() => getMockStatementBranchFilterOptions(role), [role]);
+  const mockWalletDisplay = useMemo(() => getWalletBalanceDisplayForRole(role), [role]);
+  const mockDashboard = useMemo(() => getMockDashboardForRole(role), [role]);
+  const mockBranchOverview = useMemo(() => getMockBranchWalletOverviewForRole(role), [role]);
+
+  const [walletFilter, setWalletFilter] = useState(ALL_WALLETS);
+  const [dateFilter, setDateFilter] = useState<string | null>(null);
+  const [liveWallets, setLiveWallets] = useState<LiveWalletOption[]>([]);
+  const [liveStatements, setLiveStatements] = useState<WalletStatementRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [companyFrozen, setCompanyFrozen] = useState(false);
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setLiveWallets([]);
+      setLiveStatements([]);
+      return;
+    }
+
+    let cancelled = false;
+    setLoading(true);
+    void (async () => {
+      try {
+        const overview = await businessWalletApi.overview();
+        if (cancelled) return;
+
+        const options: LiveWalletOption[] = [];
+        if (overview.companyWallet) {
+          const company = overview.wallets.find((w) => w.scope === 'company');
+          options.push({
+            id: overview.companyWallet.id,
+            label: 'Head Office (company)',
+            balance: overview.companyWallet.availableBalance,
+            branchName: 'Head Office',
+            isFrozen: Boolean(company?.isFrozen),
+          });
+          setCompanyFrozen(Boolean(company?.isFrozen));
+        }
+
+        for (const wallet of overview.wallets.filter((w) => w.scope === 'branch')) {
+          options.push({
+            id: wallet.id,
+            label: wallet.branchName || 'Branch',
+            balance: wallet.availableBalance,
+            branchName: wallet.branchName,
+            isFrozen: Boolean(wallet.isFrozen),
+          });
+        }
+        setLiveWallets(options);
+
+        const statements = await businessWalletApi.statements({
+          walletId: walletFilter === ALL_WALLETS ? null : walletFilter,
+          limit: 100,
+        });
+        if (cancelled) return;
+        setLiveStatements(
+          statements.items.map((row) => ({
+            ...row,
+            createdAt: row.createdAt || new Date().toISOString(),
+          })),
+        );
+      } catch (error) {
+        if (!cancelled) {
+          toast.error(
+            error instanceof BusinessApiError ? error.message : 'Could not load statements',
+          );
+          setLiveStatements([]);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated, walletFilter]);
+
+  const allStatements = isAuthenticated ? liveStatements : mockStatements;
+  const branchOptions = isAuthenticated
+    ? liveWallets.map((wallet) => wallet.label)
+    : mockBranchOptions;
+  const walletDisplay = isAuthenticated
+    ? {
+        label:
+          walletFilter === ALL_WALLETS
+            ? 'Wallet balance'
+            : liveWallets.find((w) => w.id === walletFilter)?.label || 'Wallet balance',
+        balance:
+          walletFilter === ALL_WALLETS
+            ? liveWallets[0]?.balance ?? 0
+            : liveWallets.find((w) => w.id === walletFilter)?.balance ?? 0,
+      }
+    : mockWalletDisplay;
+  const isFrozen = isAuthenticated
+    ? walletFilter === ALL_WALLETS
+      ? companyFrozen
+      : Boolean(liveWallets.find((w) => w.id === walletFilter)?.isFrozen)
+    : mockDashboard.wallet.isFrozen;
 
   const filteredStatements = useMemo(() => {
     return allStatements
       .filter((row) => {
-        if (branchFilter !== ALL_BRANCHES && row.branchName !== branchFilter) {
-          return false;
+        if (!isAuthenticated && walletFilter !== ALL_WALLETS) {
+          const selectedLabel = mockBranchOptions.find((name) => name === walletFilter);
+          if (selectedLabel && row.branchName !== selectedLabel) return false;
         }
         if (dateFilter && getStatementDateKey(row) !== dateFilter) {
           return false;
         }
         return true;
       })
-      .sort(
-        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-      );
-  }, [allStatements, branchFilter, dateFilter]);
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }, [allStatements, dateFilter, isAuthenticated, mockBranchOptions, walletFilter]);
 
   const summary = useMemo(() => {
     const totalCredit = filteredStatements.reduce(
@@ -79,26 +179,42 @@ export function WalletStatementsFlow() {
 
     let walletBalance = walletDisplay.balance;
 
-    if (branchFilter !== ALL_BRANCHES) {
-      const branch = branchOverview.find((item) => item.branchName === branchFilter);
+    if (!isAuthenticated && walletFilter !== ALL_WALLETS) {
+      const branch = mockBranchOverview.find((item) => item.branchName === walletFilter);
       walletBalance = branch?.allocatedBalance ?? filteredStatements[0]?.balanceAfter ?? walletBalance;
     } else if (dateFilter && filteredStatements.length > 0) {
       walletBalance = filteredStatements[0].balanceAfter;
     }
 
     return { totalCredit, totalDebit, walletBalance };
-  }, [branchFilter, branchOverview, dateFilter, filteredStatements, walletDisplay.balance]);
+  }, [
+    dateFilter,
+    filteredStatements,
+    isAuthenticated,
+    mockBranchOverview,
+    walletDisplay.balance,
+    walletFilter,
+  ]);
 
-  const branchSelectOptions = useMemo(
-    () => [
-      { value: ALL_BRANCHES, label: 'All branches' },
+  const branchSelectOptions = useMemo(() => {
+    if (isAuthenticated) {
+      return [
+        { value: ALL_WALLETS, label: 'All wallets' },
+        ...liveWallets.map((wallet) => ({
+          value: wallet.id,
+          label: wallet.label,
+        })),
+      ];
+    }
+
+    return [
+      { value: ALL_WALLETS, label: 'All branches' },
       ...branchOptions.map((branchName) => ({
         value: branchName,
         label: branchName,
       })),
-    ],
-    [branchOptions],
-  );
+    ];
+  }, [branchOptions, isAuthenticated, liveWallets]);
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
@@ -110,7 +226,7 @@ export function WalletStatementsFlow() {
         {canExport && (
           <button
             type="button"
-            onClick={() => toast.success('Statement export started (demo)')}
+            onClick={() => toast.success('Statement export will be available soon')}
             className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
           >
             <Download className="h-4 w-4" />
@@ -133,13 +249,11 @@ export function WalletStatementsFlow() {
           </p>
         </div>
         <div className="rounded-xl border border-blue-200 bg-white p-4 shadow-sm">
-          <p className="text-sm text-gray-500">
-            {branchFilter === ALL_BRANCHES ? walletDisplay.label : `${branchFilter} balance`}
-          </p>
+          <p className="text-sm text-gray-500">{walletDisplay.label}</p>
           <p className="mt-1 text-xl font-semibold text-gray-900">
             {formatPrice(summary.walletBalance)}
           </p>
-          {dashboard.wallet.isFrozen ? (
+          {isFrozen ? (
             <p className="mt-1 text-xs font-medium text-red-normal">Wallet is frozen</p>
           ) : null}
         </div>
@@ -148,14 +262,18 @@ export function WalletStatementsFlow() {
       <div className="flex flex-col gap-3 rounded-xl border border-gray-200 bg-white p-4 shadow-sm sm:flex-row sm:items-end">
         <div className="min-w-[200px] flex-1">
           <label htmlFor="statement-branch-filter" className="mb-1.5 block text-sm font-medium text-gray-700">
-            Branch
+            {isAuthenticated ? 'Wallet' : 'Branch'}
           </label>
           <BusinessSelect
             id="statement-branch-filter"
-            value={branchFilter}
-            onChange={setBranchFilter}
-            disabled={isBranchUser && branchOptions.length <= 1}
-            aria-label="Filter by branch"
+            value={walletFilter}
+            onChange={setWalletFilter}
+            disabled={
+              loading ||
+              (isBranchUser &&
+                (isAuthenticated ? liveWallets.length <= 1 : mockBranchOptions.length <= 1))
+            }
+            aria-label={isAuthenticated ? 'Filter by wallet' : 'Filter by branch'}
             options={branchSelectOptions}
           />
         </div>
@@ -175,11 +293,13 @@ export function WalletStatementsFlow() {
 
       {filteredStatements.length === 0 ? (
         <EmptyState
-          title="No statement entries"
+          title={loading ? 'Loading statements…' : 'No statement entries'}
           description={
-            dateFilter || branchFilter !== ALL_BRANCHES
-              ? 'No wallet activity matches your filters. Try another branch or date.'
-              : 'Wallet funding and debits will appear here once activity starts.'
+            loading
+              ? 'Fetching wallet activity…'
+              : dateFilter || walletFilter !== ALL_WALLETS
+                ? 'No wallet activity matches your filters. Try another wallet or date.'
+                : 'Wallet funding and debits will appear here once activity starts.'
           }
         />
       ) : (
@@ -247,11 +367,6 @@ export function WalletStatementsFlow() {
           </div>
         </div>
       )}
-
-      <p className="text-center text-xs text-gray-500">
-        Demo UI — statement data is mock until backend integration. Credits and debits totals include
-        completed entries only.
-      </p>
     </div>
   );
 }

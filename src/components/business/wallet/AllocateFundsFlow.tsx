@@ -56,7 +56,7 @@ export function AllocateFundsFlow() {
     reference: string;
   } | null>(null);
 
-  const branches = isAuthenticated && liveBranches.length >= 0 ? liveBranches : mockBranches;
+  const branches = isAuthenticated ? liveBranches : mockBranches;
 
   useEffect(() => {
     if (!isAuthenticated || !canAllocate) return;

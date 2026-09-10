@@ -64,7 +64,7 @@ export type WalletStatementRow = {
   balanceAfter: number;
   branchName: string | null;
   performedByName: string;
-  performedByRole: BusinessRole;
+  performedByRole: BusinessRole | string | null;
   status: 'completed' | 'pending' | 'failed';
   createdAt: string;
 };

@@ -28,23 +28,23 @@ export function BusinessNotificationsDropdown() {
   const { dashboardBootstrap, isAuthenticated } = useBusinessAuth();
   const [open, setOpen] = useState(false);
   const [localReads, setLocalReads] = useState<Record<string, boolean>>({});
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const notifications = useMemo(() => {
-    const source: BusinessNotification[] =
-      isAuthenticated && dashboardBootstrap?.notifications
-        ? dashboardBootstrap.notifications.map((row) => ({
-            id: row.id,
-            title: row.title,
-            message: row.message,
-            type: normalizeType(row.type),
-            read: Boolean(localReads[row.id] ?? row.read),
-            createdAt: row.createdAt || new Date().toISOString(),
-          }))
-        : MOCK_NOTIFICATIONS.map((row) => ({
-            ...row,
-            read: Boolean(localReads[row.id] ?? row.read),
-          }));
+    const source: BusinessNotification[] = isAuthenticated
+      ? (dashboardBootstrap?.notifications ?? []).map((row) => ({
+          id: row.id,
+          title: row.title,
+          message: row.message,
+          type: normalizeType(row.type),
+          read: Boolean(localReads[row.id] ?? row.read),
+          createdAt: row.createdAt || new Date().toISOString(),
+        }))
+      : MOCK_NOTIFICATIONS.map((row) => ({
+          ...row,
+          read: Boolean(localReads[row.id] ?? row.read),
+        }));
 
     return [...source].sort(
       (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
@@ -58,7 +58,10 @@ export function BusinessNotificationsDropdown() {
   );
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      setExpandedId(null);
+      return;
+    }
 
     const onPointerDown = (event: MouseEvent) => {
       if (!containerRef.current?.contains(event.target as Node)) {
@@ -78,8 +81,9 @@ export function BusinessNotificationsDropdown() {
     };
   }, [open]);
 
-  const markAsRead = (id: string) => {
+  const toggleNotification = (id: string) => {
     setLocalReads((current) => ({ ...current, [id]: true }));
+    setExpandedId((current) => (current === id ? null : id));
   };
 
   const markAllAsRead = () => {
@@ -136,48 +140,69 @@ export function BusinessNotificationsDropdown() {
             <p className="px-4 py-8 text-center text-sm text-gray-500">No notifications yet.</p>
           ) : (
             <ul className="max-h-[24rem] overflow-y-auto divide-y divide-gray-100">
-              {preview.map((notification) => (
-                <li key={notification.id}>
-                  <button
-                    type="button"
-                    onClick={() => markAsRead(notification.id)}
-                    className={cn(
-                      'w-full px-4 py-3 text-left transition hover:bg-gray-50',
-                      !notification.read && 'bg-blue-light/20',
-                    )}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="text-sm font-semibold text-gray-900">{notification.title}</p>
-                          <span
+              {preview.map((notification) => {
+                const expanded = expandedId === notification.id;
+                return (
+                  <li key={notification.id}>
+                    <button
+                      type="button"
+                      onClick={() => toggleNotification(notification.id)}
+                      aria-expanded={expanded}
+                      className={cn(
+                        'w-full px-4 py-3 text-left transition hover:bg-gray-50',
+                        !notification.read && 'bg-blue-light/20',
+                      )}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="text-sm font-semibold text-gray-900">
+                              {notification.title}
+                            </p>
+                            <span
+                              className={cn(
+                                'rounded-full px-2 py-0.5 text-[10px] font-medium capitalize',
+                                typeStyles[notification.type],
+                              )}
+                            >
+                              {notification.type}
+                            </span>
+                            {!notification.read ? (
+                              <span
+                                className="h-1.5 w-1.5 rounded-full bg-blue-normal"
+                                aria-label="Unread"
+                              />
+                            ) : null}
+                          </div>
+                          <p
                             className={cn(
-                              'rounded-full px-2 py-0.5 text-[10px] font-medium capitalize',
-                              typeStyles[notification.type],
+                              'mt-1 text-xs text-gray-600',
+                              expanded ? 'whitespace-pre-wrap' : 'line-clamp-2',
                             )}
                           >
-                            {notification.type}
-                          </span>
-                          {!notification.read ? (
-                            <span
-                              className="h-1.5 w-1.5 rounded-full bg-blue-normal"
-                              aria-label="Unread"
-                            />
+                            {notification.message}
+                          </p>
+                          {!expanded && notification.message.length > 90 ? (
+                            <span className="mt-1 inline-block text-[11px] font-medium text-blue-normal">
+                              Show more
+                            </span>
+                          ) : null}
+                          {expanded && notification.message.length > 90 ? (
+                            <span className="mt-1 inline-block text-[11px] font-medium text-blue-normal">
+                              Show less
+                            </span>
                           ) : null}
                         </div>
-                        <p className="mt-1 line-clamp-2 text-xs text-gray-600">
-                          {notification.message}
-                        </p>
+                        <time className="shrink-0 text-[10px] text-gray-500">
+                          {formatDistanceToNow(new Date(notification.createdAt), {
+                            addSuffix: true,
+                          })}
+                        </time>
                       </div>
-                      <time className="shrink-0 text-[10px] text-gray-500">
-                        {formatDistanceToNow(new Date(notification.createdAt), {
-                          addSuffix: true,
-                        })}
-                      </time>
-                    </div>
-                  </button>
-                </li>
-              ))}
+                    </button>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </div>

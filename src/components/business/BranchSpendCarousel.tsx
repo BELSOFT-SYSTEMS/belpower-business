@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import type { BranchSpendItem, BranchSpendPeriod, BusinessRole } from '@/types/business';
 import { getMockBranchSpendForPeriod } from '@/data/businessMocks';
@@ -36,14 +37,11 @@ function BranchSpendCard({ branch }: { branch: BranchSpendItem }) {
 
 export function BranchSpendCarousel({ role, items }: BranchSpendCarouselProps) {
   const [period, setPeriod] = useState<BranchSpendPeriod>('30d');
+  const liveMode = items !== undefined;
   const branches = useMemo(() => {
-    if (items && period === '30d') return items;
-    if (items && period !== '30d') {
-      // Live bootstrap currently ships month spend only; keep that list for other period toggles.
-      return items;
-    }
+    if (liveMode) return items ?? [];
     return getMockBranchSpendForPeriod(period, role);
-  }, [items, period, role]);
+  }, [items, liveMode, period, role]);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const trackRef = useRef<HTMLUListElement>(null);
@@ -105,7 +103,7 @@ export function BranchSpendCarousel({ role, items }: BranchSpendCarouselProps) {
   const measureLayout = useCallback(() => {
     const track = trackRef.current;
     const container = containerRef.current;
-    if (!track || !container) return;
+    if (!track || !container || !branches.length) return;
 
     const viewportWidth = container.clientWidth;
 
@@ -142,7 +140,7 @@ export function BranchSpendCarousel({ role, items }: BranchSpendCarouselProps) {
     canLoopRef.current = false;
     setCanNavigate(false);
     track.style.transform = '';
-  }, [applyOffset, measureLoopWidth, needsLoop, normalizeOffset]);
+  }, [applyOffset, branches.length, measureLoopWidth, needsLoop, normalizeOffset]);
 
   useEffect(() => {
     setNeedsLoop(false);
@@ -154,15 +152,16 @@ export function BranchSpendCarousel({ role, items }: BranchSpendCarouselProps) {
   }, [period, branches]);
 
   useLayoutEffect(() => {
+    if (!branches.length) return;
     measureLayout();
     const rafId = window.requestAnimationFrame(measureLayout);
     return () => window.cancelAnimationFrame(rafId);
-  }, [displayItems, measureLayout]);
+  }, [branches.length, displayItems, measureLayout]);
 
   useEffect(() => {
     const track = trackRef.current;
     const container = containerRef.current;
-    if (!track || !container) return;
+    if (!track || !container || !branches.length) return;
 
     const observer = new ResizeObserver(measureLayout);
     observer.observe(container);
@@ -172,7 +171,7 @@ export function BranchSpendCarousel({ role, items }: BranchSpendCarouselProps) {
     }
 
     return () => observer.disconnect();
-  }, [displayItems, measureLayout]);
+  }, [branches.length, displayItems, measureLayout]);
 
   const pauseAutoScroll = useCallback((duration = MANUAL_PAUSE_MS) => {
     pausedRef.current = true;
@@ -204,7 +203,7 @@ export function BranchSpendCarousel({ role, items }: BranchSpendCarouselProps) {
   );
 
   useEffect(() => {
-    if (!needsLoop) return;
+    if (!needsLoop || !branches.length) return;
 
     let frame = 0;
 
@@ -221,13 +220,12 @@ export function BranchSpendCarousel({ role, items }: BranchSpendCarouselProps) {
           track.style.transform = `translate3d(-${offsetRef.current}px, 0, 0)`;
         }
       }
-
       frame = window.requestAnimationFrame(animate);
     };
 
     frame = window.requestAnimationFrame(animate);
     return () => window.cancelAnimationFrame(frame);
-  }, [needsLoop, displayItems]);
+  }, [branches.length, needsLoop, displayItems]);
 
   useEffect(
     () => () => {
@@ -236,79 +234,96 @@ export function BranchSpendCarousel({ role, items }: BranchSpendCarouselProps) {
     [],
   );
 
-  if (!branches.length) return null;
-
   return (
     <div className="min-w-0">
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h2 className="text-lg font-semibold text-gray-900">Spend by branch</h2>
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex flex-wrap gap-2">
-            {SPEND_PERIOD_OPTIONS.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                onClick={() => setPeriod(option.value)}
-                className={cn(
-                  'rounded-full px-3 py-1 text-xs font-medium',
-                  period === option.value
-                    ? 'bg-blue-normal text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200',
-                )}
-              >
-                {option.label}
-              </button>
-            ))}
+        {branches.length > 0 ? (
+          <div className="flex flex-wrap items-center gap-2">
+            {!liveMode ? (
+              <div className="flex flex-wrap gap-2">
+                {SPEND_PERIOD_OPTIONS.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setPeriod(option.value)}
+                    className={cn(
+                      'rounded-full px-3 py-1 text-xs font-medium',
+                      period === option.value
+                        ? 'bg-blue-normal text-white'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200',
+                    )}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+            {canNavigate ? (
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => scrollByStep('prev')}
+                  className="rounded-lg border border-gray-200 bg-white p-1.5 text-gray-600 hover:bg-gray-50"
+                  aria-label="Previous branch"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => scrollByStep('next')}
+                  className="rounded-lg border border-gray-200 bg-white p-1.5 text-gray-600 hover:bg-gray-50"
+                  aria-label="Next branch"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+            ) : null}
           </div>
-          {canNavigate && (
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                onClick={() => scrollByStep('prev')}
-                className="rounded-lg border border-gray-200 bg-white p-1.5 text-gray-600 hover:bg-gray-50"
-                aria-label="Previous branch"
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </button>
-              <button
-                type="button"
-                onClick={() => scrollByStep('next')}
-                className="rounded-lg border border-gray-200 bg-white p-1.5 text-gray-600 hover:bg-gray-50"
-                aria-label="Next branch"
-              >
-                <ChevronRight className="h-4 w-4" />
-              </button>
-            </div>
-          )}
-        </div>
+        ) : null}
       </div>
 
-      <div
-        ref={containerRef}
-        className="relative w-full min-w-0 overflow-hidden"
-        onMouseEnter={() => {
-          pausedRef.current = true;
-        }}
-        onMouseLeave={() => {
-          if (!pauseTimerRef.current) pausedRef.current = false;
-        }}
-        onTouchStart={() => {
-          pauseAutoScroll();
-        }}
-      >
-        <ul
-          ref={trackRef}
-          className={cn(
-            'flex gap-3 pb-1 will-change-transform',
-            needsLoop ? 'w-max' : 'w-full min-w-0',
-          )}
-          aria-label="Spend by branch"
+      {branches.length === 0 ? (
+        <div className="py-10 text-center">
+          <p className="text-sm text-gray-500">No branch spend yet.</p>
+          <p className="mt-1 text-sm text-gray-500">
+            Add operating branches and allocate funds to see spend by location.
+          </p>
+          <Link
+            href="/business/branches"
+            className="mt-4 inline-block text-sm font-medium text-blue-normal hover:underline"
+          >
+            Manage branches
+          </Link>
+        </div>
+      ) : (
+        <div
+          ref={containerRef}
+          className="relative w-full min-w-0 overflow-hidden"
+          onMouseEnter={() => {
+            pausedRef.current = true;
+          }}
+          onMouseLeave={() => {
+            if (!pauseTimerRef.current) pausedRef.current = false;
+          }}
+          onTouchStart={() => {
+            pauseAutoScroll();
+          }}
         >
-          {displayItems.map((branch) => (
-            <BranchSpendCard key={branch.key} branch={branch} />
-          ))}
-        </ul>
-      </div>
+          <ul
+            ref={trackRef}
+            className={cn(
+              'flex gap-3 pb-1 will-change-transform',
+              needsLoop ? 'w-max' : 'w-full min-w-0',
+            )}
+            aria-label="Spend by branch"
+          >
+            {displayItems.map((branch) => (
+              <BranchSpendCard key={branch.key} branch={branch} />
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,19 +1,85 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { PageHeader } from '@/components/business/PageHeader';
 import { BusinessTransactionList } from '@/components/business/BusinessTransactionList';
 import { useBusinessAuth } from '@/context/BusinessAuthContext';
 import { getMockTransactionsForRole } from '@/data/businessMocks';
+import { BusinessApiError, businessTransactionsApi } from '@/lib/businessApi';
+import type { BusinessTransactionPreview } from '@/types/business';
+import { toast } from 'sonner';
 
 const STATUS_FILTERS = ['all', 'completed', 'pending', 'failed'] as const;
 
+function mapLiveTransactions(
+  rows: Array<{
+    id: string;
+    reference: string;
+    service: string;
+    provider: string | null;
+    amount: number;
+    status: string;
+    entryType: 'credit' | 'debit';
+    branchName: string | null;
+    userName: string | null;
+    createdAt: string | null;
+  }>,
+): BusinessTransactionPreview[] {
+  return rows.map((tx) => ({
+    id: tx.id,
+    reference: tx.reference,
+    service: tx.service || 'payment',
+    provider: tx.provider || '—',
+    amount: tx.amount,
+    status:
+      tx.status === 'completed' || tx.status === 'pending' || tx.status === 'failed'
+        ? tx.status
+        : 'pending',
+    entryType: tx.entryType,
+    branchName: tx.branchName || '—',
+    userName: tx.userName || '—',
+    createdAt: tx.createdAt || new Date().toISOString(),
+  }));
+}
+
 export default function TransactionsPage() {
-  const { user, demoRole } = useBusinessAuth();
+  const { user, demoRole, isAuthenticated } = useBusinessAuth();
   const role = user?.role ?? demoRole;
-  const transactions = getMockTransactionsForRole(role);
+  const [transactions, setTransactions] = useState<BusinessTransactionPreview[]>(() =>
+    isAuthenticated ? [] : getMockTransactionsForRole(role),
+  );
+  const [loading, setLoading] = useState(false);
   const [statusFilter, setStatusFilter] = useState<(typeof STATUS_FILTERS)[number]>('all');
   const [search, setSearch] = useState('');
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setTransactions(getMockTransactionsForRole(role));
+      return;
+    }
+
+    let cancelled = false;
+    setLoading(true);
+    void (async () => {
+      try {
+        const result = await businessTransactionsApi.list({ limit: 100 });
+        if (!cancelled) setTransactions(mapLiveTransactions(result.items));
+      } catch (error) {
+        if (!cancelled) {
+          toast.error(
+            error instanceof BusinessApiError ? error.message : 'Could not load transactions',
+          );
+          setTransactions([]);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated, role]);
 
   const filtered = useMemo(() => {
     return transactions.filter((tx) => {
@@ -62,7 +128,9 @@ export default function TransactionsPage() {
       <div className="overflow-hidden rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
         <BusinessTransactionList
           transactions={filtered}
-          emptyMessage="No transactions match your filters."
+          emptyMessage={
+            loading ? 'Loading transactions…' : 'No transactions match your filters.'
+          }
         />
       </div>
     </div>

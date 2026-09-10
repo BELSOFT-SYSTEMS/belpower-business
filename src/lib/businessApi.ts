@@ -366,6 +366,83 @@ export const businessAuthApi = {
       body: JSON.stringify({ refreshToken: refreshToken || undefined }),
     });
   },
+
+  sendContactEmailOtp(email: string) {
+    return businessApiRequest<{ email: string; expiresAt?: string; otp?: string }>(
+      '/settings/contact/send-email-otp',
+      { method: 'POST', auth: true, body: JSON.stringify({ email }) },
+    );
+  },
+
+  verifyContactEmail(email: string, otp: string) {
+    return businessApiRequest<BusinessAuthCompany>('/settings/contact/verify-email', {
+      method: 'POST',
+      auth: true,
+      body: JSON.stringify({ email, otp }),
+    });
+  },
+
+  sendContactPhoneOtp(phone: string) {
+    return businessApiRequest<{ phone: string; expiresAt?: string; otp?: string }>(
+      '/settings/contact/send-phone-otp',
+      { method: 'POST', auth: true, body: JSON.stringify({ phone }) },
+    );
+  },
+
+  verifyContactPhone(phone: string, otp: string) {
+    return businessApiRequest<BusinessAuthCompany>('/settings/contact/verify-phone', {
+      method: 'POST',
+      auth: true,
+      body: JSON.stringify({ phone, otp }),
+    });
+  },
+};
+
+export type BusinessTransactionListItem = {
+  id: string;
+  reference: string;
+  service: string;
+  provider: string | null;
+  amount: number;
+  status: 'completed' | 'pending' | 'failed';
+  entryType: 'credit' | 'debit';
+  branchName: string | null;
+  userName: string | null;
+  createdAt: string | null;
+  paymentMethod?: string | null;
+  completedAt?: string | null;
+  failureReason?: string | null;
+  balanceBefore?: number | null;
+  balanceAfter?: number | null;
+  note?: string | null;
+  metadata?: Record<string, unknown>;
+  detail?: {
+    description?: string;
+    orderId?: string | null;
+    performedByRole?: string | null;
+  };
+};
+
+export const businessTransactionsApi = {
+  list(params?: { limit?: number; offset?: number }) {
+    const query = new URLSearchParams();
+    if (params?.limit != null) query.set('limit', String(params.limit));
+    if (params?.offset != null) query.set('offset', String(params.offset));
+    const qs = query.toString();
+    return businessApiRequest<{
+      items: BusinessTransactionListItem[];
+      total: number;
+      limit: number;
+      offset: number;
+    }>(`/transactions${qs ? `?${qs}` : ''}`, { method: 'GET', auth: true });
+  },
+
+  get(id: string) {
+    return businessApiRequest<BusinessTransactionListItem>(`/transactions/${id}`, {
+      method: 'GET',
+      auth: true,
+    });
+  },
 };
 
 export const businessBranchesApi = {
@@ -466,5 +543,33 @@ export const businessWalletApi = {
       auth: true,
       body: JSON.stringify(payload),
     });
+  },
+
+  statements(params?: { walletId?: string | null; limit?: number; offset?: number }) {
+    const query = new URLSearchParams();
+    if (params?.walletId) query.set('walletId', params.walletId);
+    if (params?.limit != null) query.set('limit', String(params.limit));
+    if (params?.offset != null) query.set('offset', String(params.offset));
+    const qs = query.toString();
+    return businessApiRequest<{
+      items: Array<{
+        id: string;
+        reference: string;
+        type: 'credit' | 'debit';
+        description: string;
+        amount: number;
+        balanceBefore: number;
+        balanceAfter: number;
+        branchName: string | null;
+        performedByName: string;
+        performedByRole: string | null;
+        status: 'completed' | 'pending' | 'failed';
+        createdAt: string;
+      }>;
+      total: number;
+      limit: number;
+      offset: number;
+      walletId: string | null;
+    }>(`/wallet/statements${qs ? `?${qs}` : ''}`, { method: 'GET', auth: true });
   },
 };

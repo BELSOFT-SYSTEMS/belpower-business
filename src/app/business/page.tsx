@@ -117,7 +117,7 @@ export default function BusinessDashboardPage() {
   } = useBusinessAuth();
 
   const role = user?.role ?? demoRole;
-  const useLive = Boolean(isAuthenticated && dashboardBootstrap);
+  const useLive = Boolean(isAuthenticated);
 
   const mockDashboard = useMemo(() => getMockDashboardForRole(role), [role]);
   const mockWalletDisplay = useMemo(() => getWalletBalanceDisplayForRole(role), [role]);

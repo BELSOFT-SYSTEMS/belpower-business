@@ -1,26 +1,17 @@
 'use client';
 
-import Image from 'next/image';
 import { useEffect, useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { BusinessAvatar } from '@/components/business/BusinessAvatar';
 import { BusinessFormModal } from '@/components/business/BusinessFormModal';
 import { PageHeader } from '@/components/business/PageHeader';
 import { OtpInput } from '@/components/business/register/OtpInput';
 import { useBusinessAuth } from '@/context/BusinessAuthContext';
-import { getMockDashboardForRole } from '@/data/businessMocks';
 import { PasswordFieldWithRequirements } from '@/components/business/PasswordFieldWithRequirements';
 import { PasswordInput } from '@/components/business/PasswordInput';
 import { isBusinessPasswordValid } from '@/constants/passwordPolicy';
 import { businessAuthApi, BusinessApiError } from '@/lib/businessApi';
-import {
-  DEMO_EMAIL_OTP,
-  DEMO_PHONE_OTP,
-  mockSendEmailOtp,
-  mockSendPhoneOtp,
-  mockVerifyEmailOtp,
-  mockVerifyPhoneOtp,
-} from '@/data/mockRegisterFlow';
 import { isValidNigerianPhone, normalizePhone } from '@/data/mockPaymentCatalog';
 import { cn } from '@/lib/utils';
 
@@ -40,14 +31,12 @@ function formatDisplayPhone(value: string): string {
 }
 
 export default function BusinessSettingsPage() {
-  const { user, demoRole, business, canAccess, refreshMe } = useBusinessAuth();
-  const role = user?.role ?? demoRole;
+  const { business, canAccess, refreshMe } = useBusinessAuth();
   const canManageCompany = canAccess('business.settings.manage');
-  const mockBusiness = business ?? getMockDashboardForRole(role).business;
 
-  const [logoUrl, setLogoUrl] = useState(mockBusiness.logoUrl ?? '/belsoft-logo-2.jpg');
-  const [email, setEmail] = useState(mockBusiness.email);
-  const [phone, setPhone] = useState(mockBusiness.phone);
+  const [logoUrl, setLogoUrl] = useState<string | null>(business?.logoUrl ?? null);
+  const [email, setEmail] = useState(business?.email ?? '');
+  const [phone, setPhone] = useState(business?.phone ?? '');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [changeField, setChangeField] = useState<ContactField | null>(null);
@@ -57,6 +46,7 @@ export default function BusinessSettingsPage() {
   const [sendingOtp, setSendingOtp] = useState(false);
   const [verifyingOtp, setVerifyingOtp] = useState(false);
   const [otpError, setOtpError] = useState<string | null>(null);
+  const [devOtpHint, setDevOtpHint] = useState<string | null>(null);
 
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -64,10 +54,10 @@ export default function BusinessSettingsPage() {
   const [updatingPassword, setUpdatingPassword] = useState(false);
 
   useEffect(() => {
-    setLogoUrl(mockBusiness.logoUrl ?? '/belsoft-logo-2.jpg');
-    setEmail(mockBusiness.email);
-    setPhone(mockBusiness.phone);
-  }, [mockBusiness.email, mockBusiness.logoUrl, mockBusiness.phone]);
+    setLogoUrl(business?.logoUrl ?? null);
+    setEmail(business?.email ?? '');
+    setPhone(business?.phone ?? '');
+  }, [business?.email, business?.logoUrl, business?.phone]);
 
   const resetChangeFlow = () => {
     setChangeField(null);
@@ -77,6 +67,7 @@ export default function BusinessSettingsPage() {
     setSendingOtp(false);
     setVerifyingOtp(false);
     setOtpError(null);
+    setDevOtpHint(null);
   };
 
   const openChange = (field: ContactField) => {
@@ -85,6 +76,7 @@ export default function BusinessSettingsPage() {
     setOtp('');
     setOtpSent(false);
     setOtpError(null);
+    setDevOtpHint(null);
   };
 
   const handleLogoPick = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -99,7 +91,7 @@ export default function BusinessSettingsPage() {
 
     try {
       const updated = await businessAuthApi.uploadLogo(file);
-      setLogoUrl(updated.logoUrl || logoUrl);
+      setLogoUrl(updated.logoUrl || null);
       toast.success('Logo updated');
       await refreshMe();
     } catch (error) {
@@ -151,6 +143,7 @@ export default function BusinessSettingsPage() {
     if (!changeField || sendingOtp || verifyingOtp) return;
 
     setOtpError(null);
+    setDevOtpHint(null);
 
     if (changeField === 'email') {
       const nextEmail = draftValue.trim().toLowerCase();
@@ -160,13 +153,20 @@ export default function BusinessSettingsPage() {
       }
       setSendingOtp(true);
       try {
-        await mockSendEmailOtp(nextEmail);
+        const result = await businessAuthApi.sendContactEmailOtp(nextEmail);
         setDraftValue(nextEmail);
         setOtpSent(true);
         setOtp('');
-        toast.success(`Verification code sent to ${nextEmail} (demo)`);
+        if (result.otp) setDevOtpHint(result.otp);
+        toast.success(`Verification code sent to ${nextEmail}`);
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : 'Could not send code');
+        toast.error(
+          error instanceof BusinessApiError
+            ? error.message
+            : error instanceof Error
+              ? error.message
+              : 'Could not send code',
+        );
       } finally {
         setSendingOtp(false);
       }
@@ -185,13 +185,20 @@ export default function BusinessSettingsPage() {
 
     setSendingOtp(true);
     try {
-      await mockSendPhoneOtp(nextPhone);
+      const result = await businessAuthApi.sendContactPhoneOtp(nextPhone);
       setDraftValue(nextPhone);
       setOtpSent(true);
       setOtp('');
-      toast.success(`Verification code sent to ${formatDisplayPhone(nextPhone)} (demo)`);
+      if (result.otp) setDevOtpHint(result.otp);
+      toast.success(`Verification code sent to ${formatDisplayPhone(nextPhone)}`);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Could not send code');
+      toast.error(
+        error instanceof BusinessApiError
+          ? error.message
+          : error instanceof Error
+            ? error.message
+            : 'Could not send code',
+      );
     } finally {
       setSendingOtp(false);
     }
@@ -211,23 +218,36 @@ export default function BusinessSettingsPage() {
 
     try {
       if (changeField === 'email') {
-        await mockVerifyEmailOtp(draftValue, otp);
-        setEmail(draftValue);
-        toast.success('Contact email updated (demo)');
+        const updated = await businessAuthApi.verifyContactEmail(draftValue, otp);
+        setEmail(updated.email);
+        toast.success('Contact email updated');
       } else {
-        await mockVerifyPhoneOtp(draftValue, otp);
-        setPhone(formatDisplayPhone(draftValue));
-        toast.success('Phone number updated (demo)');
+        const updated = await businessAuthApi.verifyContactPhone(draftValue, otp);
+        setPhone(formatDisplayPhone(updated.phone));
+        toast.success('Phone number updated');
       }
+      await refreshMe();
       resetChangeFlow();
     } catch (error) {
-      setOtpError(error instanceof Error ? error.message : 'Invalid verification code');
+      setOtpError(
+        error instanceof BusinessApiError
+          ? error.message
+          : error instanceof Error
+            ? error.message
+            : 'Invalid verification code',
+      );
     } finally {
       setVerifyingOtp(false);
     }
   };
 
-  const demoOtp = changeField === 'email' ? DEMO_EMAIL_OTP : DEMO_PHONE_OTP;
+  if (!business) {
+    return (
+      <div className="mx-auto max-w-3xl space-y-6">
+        <PageHeader title="Business settings" description="Loading company profile…" />
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -244,13 +264,11 @@ export default function BusinessSettingsPage() {
         <h2 className="mb-4 text-lg font-semibold text-gray-900">Company profile</h2>
 
         <div className="mb-6 flex items-center gap-4">
-          <Image
-            src={logoUrl}
-            alt="Business logo"
-            width={64}
-            height={64}
-            className="rounded-xl border border-gray-200 object-contain p-1"
-            unoptimized={logoUrl.startsWith('blob:')}
+          <BusinessAvatar
+            name={business.businessName}
+            logoUrl={logoUrl}
+            size={64}
+            className="shrink-0"
           />
           {canManageCompany ? (
             <div>
@@ -276,18 +294,18 @@ export default function BusinessSettingsPage() {
         <div className="space-y-4">
           <div>
             <label className="mb-1.5 block text-sm font-medium text-gray-700">Business ID</label>
-            <input readOnly value={mockBusiness.businessId} className={readonlyFieldClass} />
+            <input readOnly value={business.businessId} className={readonlyFieldClass} />
           </div>
           <div>
             <label className="mb-1.5 block text-sm font-medium text-gray-700">Business name</label>
-            <input readOnly value={mockBusiness.businessName} className={readonlyFieldClass} />
+            <input readOnly value={business.businessName} className={readonlyFieldClass} />
           </div>
           <div>
             <label className="mb-1.5 block text-sm font-medium text-gray-700">Address</label>
             <textarea
               readOnly
               rows={2}
-              value={mockBusiness.address}
+              value={business.address}
               className={cn(readonlyFieldClass, 'resize-none')}
             />
           </div>
@@ -394,11 +412,7 @@ export default function BusinessSettingsPage() {
             'Notify team on large payments (> ₦100,000)',
           ].map((label) => (
             <label key={label} className="flex items-center gap-3 text-sm text-gray-700">
-              <input
-                type="checkbox"
-                defaultChecked
-                className="rounded border-gray-300"
-              />
+              <input type="checkbox" defaultChecked className="rounded border-gray-300" />
               {label}
             </label>
           ))}
@@ -461,9 +475,9 @@ export default function BusinessSettingsPage() {
             <Loader2 className="h-4 w-4 animate-spin text-blue-normal" aria-hidden />
             Verifying…
           </p>
-        ) : (
-          <p className="text-xs text-gray-500">Demo OTP: {demoOtp}</p>
-        )}
+        ) : devOtpHint ? (
+          <p className="text-xs text-gray-500">Dev OTP: {devOtpHint}</p>
+        ) : null}
       </BusinessFormModal>
     </div>
   );
