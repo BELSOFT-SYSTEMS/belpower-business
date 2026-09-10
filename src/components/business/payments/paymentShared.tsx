@@ -1,10 +1,10 @@
 'use client';
 
-import Image from 'next/image';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { Check, ChevronLeft, ChevronRight, Loader2, Star, Wallet, XCircle } from 'lucide-react';
 import { BusinessSelect } from '@/components/business/BusinessSelect';
+import { BusinessProviderAvatar } from '@/components/business/BusinessProviderAvatar';
 import { useBusinessAuth } from '@/context/BusinessAuthContext';
 import { isHeadOfficeRole } from '@/constants/businessRoles';
 import {
@@ -475,13 +475,7 @@ export function ProviderTiles({
                 : 'border-gray-200 bg-white text-gray-800 hover:border-gray-300',
             )}
           >
-            <Image
-              src={option.logo}
-              alt=""
-              width={28}
-              height={28}
-              className="h-7 w-7 rounded-md bg-white object-contain"
-            />
+            <BusinessProviderAvatar src={option.logo} provider={option.id} size="md" />
             {option.name}
           </button>
         );

@@ -128,15 +128,17 @@ export default function ReceiptHTML({
         <div className={styles.logoContainer}>
           <img src="/belpower_full.png" alt="BelPower Logo" className={styles.logo} />
           {providerLogo && (
-            <img
-              src={providerLogo}
-              alt={`${transaction.provider} Logo`}
-              className={styles.providerLogo}
-              onError={(e) => {
-                const target = e.target as HTMLImageElement;
-                target.src = '/electricity.png';
-              }}
-            />
+            <div className={styles.providerLogoChip}>
+              <img
+                src={providerLogo}
+                alt={`${transaction.provider || 'Provider'} Logo`}
+                className={styles.providerLogo}
+                onError={(e) => {
+                  const target = e.target as HTMLImageElement;
+                  target.src = '/electricity.png';
+                }}
+              />
+            </div>
           )}
         </div>
         <h1 className={styles.title}>Transaction Receipt</h1>

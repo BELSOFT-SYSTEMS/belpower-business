@@ -478,24 +478,22 @@ export function BusinessTransactionDetailModal({
             <div className="space-y-6">
               <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
                 <div className="flex items-start gap-4">
-                  <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white p-2">
-                    <BusinessTransactionProviderIcon
-                      transaction={{
-                        type: transaction.service,
-                        service: transaction.service,
-                        payment_for: transaction.service,
-                        provider: resolveProviderValue(
-                          transaction.provider,
-                          transaction.metadata,
-                        ),
-                      }}
-                      alt={
-                        resolveProviderValue(transaction.provider, transaction.metadata) ||
-                        transaction.service
-                      }
-                      size={40}
-                    />
-                  </div>
+                  <BusinessTransactionProviderIcon
+                    transaction={{
+                      type: transaction.service,
+                      service: transaction.service,
+                      payment_for: transaction.service,
+                      provider: resolveProviderValue(
+                        transaction.provider,
+                        transaction.metadata,
+                      ),
+                    }}
+                    alt={
+                      resolveProviderValue(transaction.provider, transaction.metadata) ||
+                      transaction.service
+                    }
+                    size={48}
+                  />
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold text-gray-900">
                       {getTransactionTitle(transaction)}

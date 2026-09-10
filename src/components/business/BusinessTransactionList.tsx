@@ -119,7 +119,6 @@ export function BusinessTransactionList({
                 }}
                 alt={tx.provider || tx.service}
                 size={36}
-                className="mt-0.5 rounded-lg bg-gray-50 p-1"
               />
               <div className="min-w-0 flex-1">
                 <div className="flex items-start justify-between gap-2">

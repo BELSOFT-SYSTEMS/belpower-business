@@ -2,78 +2,114 @@
 
 import { useEffect, useState } from 'react';
 import { getDiscoLogoPath } from '@/utils/discoLogoMap';
-import { getProviderLogo as getBillProviderLogo } from '@/utils/transactionIcons';
+import {
+  getProviderLogo as getBillProviderLogo,
+  getTransactionIcon,
+  getTransactionIconFallback,
+} from '@/utils/transactionIcons';
 import { cn } from '@/lib/utils';
 
+export type ProviderAvatarService =
+  | 'airtime'
+  | 'data'
+  | 'electricity'
+  | 'cable'
+  | 'phone'
+  | 'deposit'
+  | 'wallet';
+
 type BusinessProviderAvatarProps = {
-  service: 'airtime' | 'data' | 'electricity' | 'cable' | 'phone';
-  provider: string;
-  size?: 'sm' | 'md';
+  /** Bill/service type used to resolve the logo when `src` is not provided. */
+  service?: ProviderAvatarService | string;
+  provider?: string | null;
+  /** Direct public path override (e.g. tile logos). */
+  src?: string;
+  size?: 'sm' | 'md' | 'lg';
   className?: string;
+  alt?: string;
 };
 
-function resolveLogoSrc(
-  service: BusinessProviderAvatarProps['service'],
-  provider: string,
-): string {
-  const normalizedService =
-    service === 'phone' ? 'airtime' : service;
-  if (normalizedService === 'electricity') {
-    return getDiscoLogoPath(provider);
+function normalizeService(service?: string): string {
+  const value = String(service || '').toLowerCase();
+  if (value === 'phone' || value.includes('airtime') || value === 'vtu') return 'airtime';
+  if (value.includes('data')) return 'data';
+  if (value.includes('cable') || value === 'tv') return 'cable';
+  if (value.includes('electric')) return 'electricity';
+  if (
+    value === 'deposit' ||
+    value === 'wallet' ||
+    value.includes('fund') ||
+    value.includes('allocate') ||
+    value.startsWith('business_wallet')
+  ) {
+    return 'deposit';
   }
-  return getBillProviderLogo(provider, normalizedService);
+  return value || 'electricity';
 }
 
-function fallbackSrc(service: BusinessProviderAvatarProps['service']): string {
-  if (service === 'electricity') return '/electricity.png';
-  if (service === 'cable') return '/Tv.png';
-  if (service === 'data') return '/data.png';
-  return '/airtime.png';
+function resolveLogoSrc(service: string, provider?: string | null, src?: string): string {
+  if (src) return src;
+  if (service === 'deposit') return '/wallet.png';
+  if (service === 'electricity') return getDiscoLogoPath(String(provider || ''));
+  if (provider) {
+    return getBillProviderLogo(String(provider), service);
+  }
+  return getTransactionIcon({ type: service, provider: provider || undefined });
 }
+
+function fallbackFor(service: string): string {
+  return getTransactionIconFallback(service);
+}
+
+const SIZE_SHELL = {
+  sm: 'h-8 w-8',
+  md: 'h-9 w-9',
+  lg: 'h-12 w-12',
+} as const;
+
+const SIZE_MARK = {
+  sm: 'h-6 w-6',
+  md: 'h-7 w-7',
+  lg: 'h-9 w-9',
+} as const;
 
 /**
- * Same chip treatment as ElectricityDiscoSelector logos:
- * blue ring circle + contained provider mark.
+ * Shared provider logo chip — blue ring circle + contained mark.
+ * Used on beneficiaries, disco selector, transaction lists, payment tiles, receipts.
  */
 export function BusinessProviderAvatar({
   service,
   provider,
+  src,
   size = 'md',
   className,
+  alt = '',
 }: BusinessProviderAvatarProps) {
-  const resolved = resolveLogoSrc(service, provider);
-  const [src, setSrc] = useState(resolved);
+  const normalizedService = normalizeService(service);
+  const resolved = resolveLogoSrc(normalizedService, provider, src);
+  const fallback = fallbackFor(normalizedService);
+  const [currentSrc, setCurrentSrc] = useState(resolved);
 
   useEffect(() => {
-    setSrc(resolved);
+    setCurrentSrc(resolved);
   }, [resolved]);
-
-  const shell =
-    size === 'sm'
-      ? 'h-8 w-8'
-      : 'h-9 w-9';
-  const mark =
-    size === 'sm'
-      ? 'h-6 w-6'
-      : 'h-7 w-7';
 
   return (
     <span
       className={cn(
         'inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-blue-50 ring-1 ring-blue-100',
-        shell,
+        SIZE_SHELL[size],
         className,
       )}
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         key={resolved}
-        src={src}
-        alt=""
-        className={cn('block shrink-0 rounded-full object-contain', mark)}
+        src={currentSrc}
+        alt={alt}
+        className={cn('block shrink-0 rounded-full object-contain', SIZE_MARK[size])}
         onError={() => {
-          const next = fallbackSrc(service);
-          if (src !== next) setSrc(next);
+          if (currentSrc !== fallback) setCurrentSrc(fallback);
         }}
       />
     </span>

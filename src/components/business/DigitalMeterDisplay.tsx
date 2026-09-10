@@ -1,12 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Image from 'next/image';
 import { IoWallet } from 'react-icons/io5';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import type { BranchMeter } from '@/types/business';
 import { getDiscoDisplayName } from '@/constants/discoNames';
-import { getDiscoIcon } from '@/utils/transactionIcons';
+import { BusinessProviderAvatar } from '@/components/business/BusinessProviderAvatar';
 import { formatPrice } from '@/utils/formatPrice';
 import styles from './DigitalMeter.module.css';
 
@@ -40,7 +39,6 @@ function DigitalMeterCard({ meter, walletBalance, showBranchLabel = false }: Dig
 
   const currentReading = readings[currentReadingIndex];
   const hasEnoughCredit = walletBalance > 0;
-  const discoIcon = getDiscoIcon(meter.disco);
 
   return (
     <div className="relative flex w-full flex-col gap-2 overflow-hidden rounded-xl bg-linear-to-t from-[#28228D] to-[#000041] p-4 text-white">
@@ -74,12 +72,11 @@ function DigitalMeterCard({ meter, walletBalance, showBranchLabel = false }: Dig
       </div>
 
       <div className="flex min-w-0 items-center gap-2">
-        <Image
-          src={discoIcon}
-          alt={meter.disco}
-          width={24}
-          height={24}
-          className="shrink-0 rounded bg-white/10 p-0.5"
+        <BusinessProviderAvatar
+          service="electricity"
+          provider={meter.disco}
+          size="sm"
+          className="bg-white/15 ring-white/20"
         />
         <p className="min-w-0 truncate text-xs text-gray-300">{getDiscoDisplayName(meter.disco)}</p>
       </div>
