@@ -499,12 +499,16 @@ export function BusinessTransactionDetailModal({
                       transaction={{
                         type: transaction.service,
                         service: transaction.service,
+                        payment_for: transaction.service,
                         provider: resolveProviderValue(
                           transaction.provider,
                           transaction.metadata,
                         ),
                       }}
-                      alt={transaction.service}
+                      alt={
+                        resolveProviderValue(transaction.provider, transaction.metadata) ||
+                        transaction.service
+                      }
                       size={40}
                     />
                   </div>

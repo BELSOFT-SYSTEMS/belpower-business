@@ -111,8 +111,13 @@ export function BusinessTransactionList({
               )}
             >
               <BusinessTransactionProviderIcon
-                transaction={{ type: tx.service, service: tx.service, provider: tx.provider }}
-                alt={tx.service}
+                transaction={{
+                  type: tx.service,
+                  service: tx.service,
+                  payment_for: tx.service,
+                  provider: tx.provider,
+                }}
+                alt={tx.provider || tx.service}
                 size={36}
                 className="mt-0.5 rounded-lg bg-gray-50 p-1"
               />

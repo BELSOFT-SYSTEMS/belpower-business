@@ -1,4 +1,6 @@
 import { getDiscoDisplayName } from '@/constants/discoNames';
+import { getDiscoLogoPath } from '@/utils/discoLogoMap';
+import { getProviderLogo as getBillProviderLogo } from '@/utils/transactionIcons';
 
 export type AirtimeNetworkId = 'mtn' | 'airtel' | 'glo' | '9mobile';
 export type CableProviderId = 'dstv' | 'gotv' | 'startimes' | 'showmax';
@@ -268,13 +270,23 @@ export function getProviderName(service: PaymentService, providerId: string): st
 }
 
 export function getProviderLogo(service: PaymentService, providerId: string): string {
+  // Shared /public mapping (same as belpower-frontend iconUtils + discoLogoMap).
   if (service === 'electricity') {
-    return ELECTRICITY_DISCOS.find((item) => item.id === providerId)?.logo ?? '/electricity.png';
+    const fromCatalog = ELECTRICITY_DISCOS.find(
+      (item) => item.id.toLowerCase() === String(providerId || '').trim().toLowerCase(),
+    )?.logo;
+    return fromCatalog || getDiscoLogoPath(providerId);
   }
   if (service === 'cable') {
-    return CABLE_PROVIDERS.find((item) => item.id === providerId)?.logo ?? '/cable.png';
+    const fromCatalog = CABLE_PROVIDERS.find(
+      (item) => item.id.toLowerCase() === String(providerId || '').trim().toLowerCase(),
+    )?.logo;
+    return fromCatalog || getBillProviderLogo(providerId, 'cable');
   }
-  return AIRTIME_NETWORKS.find((item) => item.id === providerId)?.logo ?? '/phone.png';
+  const fromCatalog = AIRTIME_NETWORKS.find(
+    (item) => item.id.toLowerCase() === String(providerId || '').trim().toLowerCase(),
+  )?.logo;
+  return fromCatalog || getBillProviderLogo(providerId, service);
 }
 
 export function getPaymentBlockReason(args: {

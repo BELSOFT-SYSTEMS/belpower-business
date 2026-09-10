@@ -1,12 +1,13 @@
 /**
- * Centralized DISCO logo paths — shared by receipts, transactions, and service availability UI.
- * Keep in sync with belpower-frontend `discoLogoMap.ts`.
+ * Centralized DISCO logo paths — shared by receipts, transactions, and electricity flows.
+ * Keep in sync with belpower-frontend `discoLogoMap.ts` (public/ assets).
  */
 
 const IBEDC = '/ibedc.jpeg';
 const GENERIC = '/electricity.png';
 
 export const DISCO_LOGO_MAP: Record<string, string> = {
+  // Short codes
   aedc: '/aedc.png',
   ekedc: '/ekedc.png',
   ikedc: '/ikedc.png',
@@ -20,6 +21,8 @@ export const DISCO_LOGO_MAP: Record<string, string> = {
   jedc: '/jedc.png',
   kedco: '/kedco.png',
   yedc: '/yedc.png',
+
+  // BuyPower / business API codes
   abuja: '/aedc.png',
   eko: '/ekedc.png',
   ikeja: '/ikedc.png',
@@ -32,6 +35,8 @@ export const DISCO_LOGO_MAP: Record<string, string> = {
   ibadan: IBEDC,
   ph: '/phedc.jpeg',
   portharcourt: '/phedc.jpeg',
+
+  // DFET slugs
   'abuja-electric': '/aedc.png',
   'eko-electric': '/ekedc.png',
   'ikeja-electric': '/ikedc.png',
@@ -43,10 +48,29 @@ export const DISCO_LOGO_MAP: Record<string, string> = {
   'yola-electric': '/yedc.png',
   'ibadan-electric': IBEDC,
   'portharcourt-electric': '/phedc.jpeg',
+
+  // Full provider names (transaction history / receipts) — belpower-frontend
+  'abuja electricity distribution company': '/aedc.png',
+  'eko electricity distribution company': '/ekedc.png',
+  'ikeja electric': '/ikedc.png',
+  'ikeja electricity distribution company': '/ikedc.png',
+  'kaduna electric': '/kaedc.png',
+  'kaduna electricity distribution company': '/kaedc.png',
+  'port harcourt': '/phedc.jpeg',
+  'port harcourt electricity distribution company': '/phedc.jpeg',
+  'benin electricity distribution company': '/bedc.png',
+  'enugu electricity distribution company': '/eedc.png',
+  'ibadan electricity distribution company': IBEDC,
+  'jos electricity distribution company': '/jedc.png',
+  'kano electricity distribution company': '/kedco.png',
+  'yola electricity distribution company': '/yedc.png',
 };
 
 export function normalizeDiscoKey(raw: string): string {
-  return raw.trim().toLowerCase().replace(/_/g, '-');
+  return String(raw || '')
+    .trim()
+    .toLowerCase()
+    .replace(/_/g, '-');
 }
 
 export function getDiscoLogoPath(providerOrCode: string): string {
@@ -54,37 +78,9 @@ export function getDiscoLogoPath(providerOrCode: string): string {
   const key = normalizeDiscoKey(providerOrCode);
   if (DISCO_LOGO_MAP[key]) return DISCO_LOGO_MAP[key];
 
-  // Canonical business codes (ABUJA, IKEJA, PH, …) and common aliases.
-  const aliases: Record<string, string> = {
-    abuza: 'abuja',
-    aedc: 'aedc',
-    abuja: 'abuja',
-    eko: 'eko',
-    ekedc: 'ekedc',
-    ikeja: 'ikeja',
-    ikedc: 'ikedc',
-    ibadan: 'ibadan',
-    ibedc: 'ibadan',
-    enugu: 'enugu',
-    eedc: 'enugu',
-    ph: 'ph',
-    phed: 'ph',
-    phedc: 'ph',
-    jos: 'jos',
-    jed: 'jos',
-    jedc: 'jos',
-    kaduna: 'kaduna',
-    kaedc: 'kaduna',
-    kaedco: 'kaduna',
-    kano: 'kano',
-    kedco: 'kano',
-    benin: 'benin',
-    bedc: 'benin',
-    yola: 'yola',
-    yedc: 'yola',
-  };
-  const aliasKey = aliases[key];
-  if (aliasKey && DISCO_LOGO_MAP[aliasKey]) return DISCO_LOGO_MAP[aliasKey];
+  // Compact key without spaces (e.g. PortHarcourt)
+  const compact = key.replace(/\s+/g, '');
+  if (DISCO_LOGO_MAP[compact]) return DISCO_LOGO_MAP[compact];
 
   return GENERIC;
 }
