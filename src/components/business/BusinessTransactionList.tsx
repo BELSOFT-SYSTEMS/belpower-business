@@ -1,15 +1,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Image from 'next/image';
 import { formatDistanceToNow } from 'date-fns';
 import type { BusinessTransactionPreview } from '@/types/business';
 import { getDiscoDisplayName } from '@/constants/discoNames';
-import { getTransactionIcon } from '@/utils/transactionIcons';
 import { formatPrice } from '@/utils/formatPrice';
 import { formatBusinessBranchLabel } from '@/utils/businessBranchLabel';
 import { StatusBadge } from '@/components/business/StatusBadge';
 import { BusinessTransactionDetailModal } from '@/components/business/BusinessTransactionDetailModal';
+import { BusinessTransactionProviderIcon } from '@/components/business/BusinessTransactionProviderIcon';
 import { cn } from '@/lib/utils';
 
 export type BusinessTransactionListUpdate = {
@@ -111,12 +110,11 @@ export function BusinessTransactionList({
                 'rounded-lg px-1 -mx-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-normal/30',
               )}
             >
-              <Image
-                src={getTransactionIcon({ type: tx.service, provider: tx.provider })}
+              <BusinessTransactionProviderIcon
+                transaction={{ type: tx.service, service: tx.service, provider: tx.provider }}
                 alt={tx.service}
-                width={36}
-                height={36}
-                className="mt-0.5 shrink-0 rounded-lg bg-gray-50 p-1"
+                size={36}
+                className="mt-0.5 rounded-lg bg-gray-50 p-1"
               />
               <div className="min-w-0 flex-1">
                 <div className="flex items-start justify-between gap-2">

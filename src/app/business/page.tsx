@@ -93,7 +93,7 @@ function mapTransactions(
     id: tx.id,
     reference: tx.reference,
     service: tx.service || 'payment',
-    provider: tx.provider || '—',
+    provider: tx.provider || '',
     amount: tx.amount,
     status:
       tx.status === 'completed' || tx.status === 'pending' || tx.status === 'failed'

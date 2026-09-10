@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { Copy, Download, RotateCw, Repeat2, X } from 'lucide-react';
 import { toast } from 'sonner';
@@ -25,12 +24,12 @@ import {
   getTrustedTransactionTotal,
 } from '@/lib/transaction-display';
 import { getTransactionTitle, isBusinessWalletAllocateTx, isBusinessWalletFundingTx } from '@/utils/transactionTitle';
-import { getTransactionIcon } from '@/utils/transactionIcons';
 import { downloadBusinessReceipt } from '@/utils/downloadBusinessReceipt';
 import { getBusinessBuyAgainLabel, getBusinessBuyAgainPath } from '@/utils/transactionActions';
 import { formatPrice } from '@/utils/formatPrice';
 import { formatBusinessBranchLabel } from '@/utils/businessBranchLabel';
 import { StatusBadge } from '@/components/business/StatusBadge';
+import { BusinessTransactionProviderIcon } from '@/components/business/BusinessTransactionProviderIcon';
 import { cn } from '@/lib/utils';
 
 type BusinessTransactionDetailModalProps = {
@@ -112,13 +111,42 @@ function normalizeStatusBadge(status: string): 'completed' | 'pending' | 'failed
   return 'pending';
 }
 
+function resolveProviderValue(
+  provider?: string | null,
+  metadata?: BusinessTransactionDetail['metadata'],
+): string {
+  const candidates = [
+    provider,
+    metadata?.provider,
+    metadata?.disco,
+    metadata?.network,
+  ];
+  for (const candidate of candidates) {
+    const value = String(candidate || '').trim();
+    const normalized = value.toLowerCase();
+    if (
+      value &&
+      value !== '—' &&
+      value !== '-' &&
+      normalized !== 'n/a' &&
+      normalized !== 'null' &&
+      normalized !== 'unknown'
+    ) {
+      return value;
+    }
+  }
+  return '';
+}
+
 function getProviderLabel(transaction: BusinessTransactionDetail) {
   const service = transaction.service.toLowerCase();
+  const provider = resolveProviderValue(transaction.provider, transaction.metadata);
   if (service === 'electricity') {
-    return getDiscoDisplayName(transaction.metadata?.disco || transaction.provider);
+    return getDiscoDisplayName(provider || transaction.metadata?.disco || '');
   }
+  if (!provider) return '—';
 
-  const provider = transaction.provider.toLowerCase();
+  const providerKey = provider.toLowerCase();
   const telcoMap: Record<string, string> = {
     mtn: 'MTN',
     airtel: 'Airtel',
@@ -128,7 +156,7 @@ function getProviderLabel(transaction: BusinessTransactionDetail) {
     gotv: 'GOtv',
     startimes: 'StarTimes',
   };
-  return telcoMap[provider] || transaction.provider.toUpperCase();
+  return telcoMap[providerKey] || provider.toUpperCase();
 }
 
 function mapApiTransactionToDetail(
@@ -142,6 +170,7 @@ function mapApiTransactionToDetail(
       : row.status === 'cancelled'
         ? 'failed'
         : 'pending';
+  const provider = resolveProviderValue(row.provider, metadata);
 
   return {
     id: row.id,
@@ -162,7 +191,7 @@ function mapApiTransactionToDetail(
     is_scheduled: false,
     scheduled_info: null,
     service: row.service || 'payment',
-    provider: row.provider || '—',
+    provider: provider || '—',
     description: row.detail?.description || row.note || undefined,
     fullName: row.userName || '—',
     email: '',
@@ -465,16 +494,18 @@ export function BusinessTransactionDetailModal({
             <div className="space-y-6">
               <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
                 <div className="flex items-start gap-4">
-                  <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white">
-                    <Image
-                      src={getTransactionIcon({
+                  <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white p-2">
+                    <BusinessTransactionProviderIcon
+                      transaction={{
                         type: transaction.service,
-                        provider: transaction.provider,
-                      })}
+                        service: transaction.service,
+                        provider: resolveProviderValue(
+                          transaction.provider,
+                          transaction.metadata,
+                        ),
+                      }}
                       alt={transaction.service}
-                      width={40}
-                      height={40}
-                      className="h-10 w-10 object-contain"
+                      size={40}
                     />
                   </div>
                   <div className="min-w-0 flex-1">
