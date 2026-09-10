@@ -9,6 +9,7 @@ export type BusinessNavItem = {
   name: string;
   href: string;
   permission?: string;
+  locked?: boolean;
   children?: { name: string; href: string; permission?: string; locked?: boolean }[];
 };
 
@@ -41,6 +42,7 @@ export const BUSINESS_NAV_ITEMS: BusinessNavItem[] = [
   { name: 'Beneficiaries', href: '/business/beneficiaries', permission: 'beneficiaries.view' },
   { name: 'Transactions', href: '/business/transactions', permission: 'transactions.view' },
   { name: 'Analytics', href: '/business/analytics', permission: 'analytics.view' },
+  { name: 'Schedules', href: '/business/schedules', permission: 'schedules.view' },
   { name: 'Team Management', href: '/business/team', permission: 'team.view' },
   { name: 'Business Settings', href: '/business/settings', permission: 'business.settings.view' },
 ];
@@ -215,6 +217,7 @@ export function getRequiredPermissionForRoute(pathname: string): string | null {
     '/business/beneficiaries': 'beneficiaries.view',
     '/business/transactions': 'transactions.view',
     '/business/analytics': 'analytics.view',
+    '/business/schedules': 'schedules.view',
     '/business/team': 'team.view',
   };
 

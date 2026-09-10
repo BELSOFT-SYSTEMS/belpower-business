@@ -11,7 +11,6 @@ import {
   getProviderName,
   isValidNigerianPhone,
   type CableProviderId,
-  type SmartcardLookup,
 } from '@/data/mockPaymentCatalog';
 import {
   businessPaymentsApi,
@@ -20,11 +19,7 @@ import {
   paymentErrorMessage,
   type NormalizedUtilityPlan,
 } from '@/lib/businessPaymentsApi';
-import {
-  meterCustomerName,
-  parseMeterVerifyCustomerData,
-  smartcardCurrentPackage,
-} from '@/utils/businessPaymentCatalog';
+import { mapCableProviderOptions } from '@/utils/businessPaymentCatalog';
 import { formatPrice } from '@/utils/formatPrice';
 import { cn } from '@/lib/utils';
 import {
@@ -44,16 +39,9 @@ import {
 
 type View = 'form' | 'success' | 'failed' | 'pending';
 
-const CABLE_PROVIDER_OPTIONS = CABLE_PROVIDERS.filter((item) => item.id !== 'showmax');
-
-function mapSmartcardLookup(raw: unknown, provider: CableProviderId): SmartcardLookup {
-  const data = parseMeterVerifyCustomerData(raw);
-  return {
-    customerName: meterCustomerName(data) || 'Customer',
-    provider,
-    currentPackage: smartcardCurrentPackage(data),
-  };
-}
+const FALLBACK_CABLE_OPTIONS = CABLE_PROVIDERS.filter((item) => item.id !== 'showmax').map(
+  (item) => ({ ...item, available: true }),
+);
 
 export function CablePaymentFlow() {
   const params = useSearchParams();
@@ -66,15 +54,44 @@ export function CablePaymentFlow() {
   const defaultPhone = business?.phone ? normalizeBusinessPhone(business.phone) : '';
   const [view, setView] = useState<View>('form');
   const [provider, setProvider] = useState<CableProviderId>(initialProvider);
+  const [cableOptions, setCableOptions] = useState(FALLBACK_CABLE_OPTIONS);
   const [smartCard, setSmartCard] = useState(params.get('smartCardNumber') ?? '');
   const [phone, setPhone] = useState(defaultPhone);
   const [packageKey, setPackageKey] = useState(params.get('package') ?? '');
   const [packages, setPackages] = useState<NormalizedUtilityPlan[]>([]);
   const [packagesLoading, setPackagesLoading] = useState(false);
-  const [lookup, setLookup] = useState<SmartcardLookup | null>(null);
-  const [lookingUp, setLookingUp] = useState(false);
   const [pending, setPending] = useState(false);
   const [result, setResult] = useState<{ reference: string; status: string } | null>(null);
+
+  const cableTiles = useMemo(() => {
+    const available = cableOptions.filter((item) => item.available);
+    const source = available.length > 0 ? available : cableOptions;
+    return source.map(({ id, name, logo }) => ({ id, name, logo }));
+  }, [cableOptions]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const status = await businessPaymentsApi.cableProviders();
+        if (cancelled) return;
+        const next = mapCableProviderOptions(status, CABLE_PROVIDERS);
+        const options = next.length > 0 ? next : FALLBACK_CABLE_OPTIONS;
+        setCableOptions(options);
+        setProvider((current) => {
+          const available = options.filter((item) => item.available);
+          const source = available.length > 0 ? available : options;
+          const match = source.find((item) => item.id === current)?.id;
+          return (match ?? source[0]?.id ?? current) as CableProviderId;
+        });
+      } catch {
+        if (!cancelled) setCableOptions(FALLBACK_CABLE_OPTIONS);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!phone && business?.phone) {
@@ -142,51 +159,23 @@ export function CablePaymentFlow() {
     () => [
       { label: 'Provider', value: getProviderName('cable', provider) },
       { label: 'Smartcard', value: smartCard || '—' },
-      { label: 'Customer', value: lookup?.customerName ?? 'Not verified' },
       { label: 'Package', value: selectedPackage?.name ?? '—' },
       { label: 'Phone', value: phoneOk ? normalizeBusinessPhone(phone) : '—' },
       { label: 'Debit', value: amount ? formatPrice(amount) : '—' },
     ],
-    [amount, lookup, phone, phoneOk, provider, selectedPackage, smartCard],
+    [amount, phone, phoneOk, provider, selectedPackage, smartCard],
   );
-
-  async function handleLookup() {
-    setLookingUp(true);
-    try {
-      const raw = await businessPaymentsApi.verifySmartcard({
-        meter: smartCard.replace(/\D/g, ''),
-        disco: cableToDisco(provider),
-      });
-      const next = mapSmartcardLookup(raw, provider);
-      setLookup(next);
-      if (next.currentPackage) {
-        const match = packages.find(
-          (item) =>
-            item.name.toLowerCase() === next.currentPackage!.toLowerCase() ||
-            item.code.toLowerCase() === next.currentPackage!.toLowerCase(),
-        );
-        if (match) setPackageKey(match.code);
-      }
-      toast.success('Smartcard verified');
-    } catch (error) {
-      setLookup(null);
-      toast.error(paymentErrorMessage(error, 'Could not verify smartcard'));
-    } finally {
-      setLookingUp(false);
-    }
-  }
 
   const reset = () => {
     setView('form');
     setSmartCard('');
-    setLookup(null);
     setResult(null);
   };
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
-    if (!lookup) {
-      toast.error('Verify the smartcard before paying');
+    if (!smartCard.replace(/\D/g, '') || smartCard.replace(/\D/g, '').length < 8) {
+      toast.error('Enter a valid smartcard / IUC number');
       return;
     }
     if (!selectedPackage) {
@@ -289,55 +278,33 @@ export function CablePaymentFlow() {
                 setSmartCard(beneficiary.accountNumber);
                 const next = beneficiary.provider.toLowerCase() as CableProviderId;
                 setProvider(next === 'showmax' ? 'dstv' : next);
-                setLookup(null);
               }}
             />
 
             <div>
               <FieldLabel>Provider</FieldLabel>
               <ProviderTiles
-                options={CABLE_PROVIDER_OPTIONS}
+                options={cableTiles}
                 value={provider}
                 onChange={(id) => {
                   setProvider(id as CableProviderId);
-                  setLookup(null);
                 }}
               />
             </div>
 
             <div>
               <FieldLabel htmlFor="smartcard">Smartcard / IUC</FieldLabel>
-              <div className="mt-1.5 flex gap-2">
-                <input
-                  id="smartcard"
-                  inputMode="numeric"
-                  value={smartCard}
-                  onChange={(event) => {
-                    setSmartCard(event.target.value);
-                    setLookup(null);
-                  }}
-                  placeholder="7012345678"
-                  className={fieldClass.replace('mt-1.5 ', '')}
-                />
-                <button
-                  type="button"
-                  onClick={handleLookup}
-                  disabled={lookingUp || smartCard.trim().length < 10}
-                  className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-800 hover:bg-gray-50 disabled:opacity-50"
-                >
-                  {lookingUp ? 'Checking…' : 'Verify'}
-                </button>
-              </div>
+              <input
+                id="smartcard"
+                inputMode="numeric"
+                value={smartCard}
+                onChange={(event) => {
+                  setSmartCard(event.target.value.replace(/[^\d]/g, ''));
+                }}
+                placeholder="7012345678"
+                className={fieldClass}
+              />
             </div>
-
-            {lookup ? (
-              <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-gray-800">
-                <p className="font-semibold">{lookup.customerName}</p>
-                {lookup.currentPackage ? (
-                  <p className="mt-1 text-gray-600">Current package: {lookup.currentPackage}</p>
-                ) : null}
-              </div>
-            ) : null}
 
             <div>
               <FieldLabel htmlFor="cable-phone">Contact phone</FieldLabel>
@@ -397,7 +364,11 @@ export function CablePaymentFlow() {
             <PayButton
               pending={pending}
               disabled={
-                !lookup || !selectedPackage || !phoneOk || packagesLoading || Boolean(blockReason)
+                smartCard.replace(/\D/g, '').length < 8 ||
+                !selectedPackage ||
+                !phoneOk ||
+                packagesLoading ||
+                Boolean(blockReason)
               }
               label={`Pay ${amount ? formatPrice(amount) : 'subscription'}`}
             />

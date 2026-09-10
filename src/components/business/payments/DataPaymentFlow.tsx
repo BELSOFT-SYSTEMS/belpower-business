@@ -18,6 +18,7 @@ import {
   paymentErrorMessage,
   type NormalizedUtilityPlan,
 } from '@/lib/businessPaymentsApi';
+import { mapNetworkProviderOptions } from '@/utils/businessPaymentCatalog';
 import { formatPrice } from '@/utils/formatPrice';
 import { cn } from '@/lib/utils';
 import {
@@ -37,18 +38,50 @@ import {
 
 type View = 'form' | 'success' | 'failed' | 'pending';
 
+const FALLBACK_NETWORKS = AIRTIME_NETWORKS.map((item) => ({ ...item, available: true }));
+
 export function DataPaymentFlow() {
   const params = useSearchParams();
   const session = usePaymentSession();
   const initialNetwork = params.get('network')?.toLowerCase() || 'mtn';
   const [view, setView] = useState<View>('form');
   const [network, setNetwork] = useState(initialNetwork);
+  const [networkOptions, setNetworkOptions] = useState(FALLBACK_NETWORKS);
   const [phone, setPhone] = useState(params.get('phoneNumber') ?? '');
   const [planKey, setPlanKey] = useState(params.get('dataPlan') ?? '');
   const [plans, setPlans] = useState<NormalizedUtilityPlan[]>([]);
   const [plansLoading, setPlansLoading] = useState(false);
   const [pending, setPending] = useState(false);
   const [result, setResult] = useState<{ reference: string; status: string } | null>(null);
+
+  const networkTiles = useMemo(() => {
+    const available = networkOptions.filter((item) => item.available);
+    const source = available.length > 0 ? available : networkOptions;
+    return source.map(({ id, name, logo }) => ({ id, name, logo }));
+  }, [networkOptions]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const status = await businessPaymentsApi.networkProviders();
+        if (cancelled) return;
+        const next = mapNetworkProviderOptions(status, AIRTIME_NETWORKS);
+        const options = next.length > 0 ? next : FALLBACK_NETWORKS;
+        setNetworkOptions(options);
+        setNetwork((current) => {
+          const available = options.filter((item) => item.available);
+          const source = available.length > 0 ? available : options;
+          return source.find((item) => item.id === current)?.id ?? source[0]?.id ?? current;
+        });
+      } catch {
+        if (!cancelled) setNetworkOptions(FALLBACK_NETWORKS);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const selectedPlan = plans.find((plan) => plan.code === planKey) ?? null;
   const amount = selectedPlan?.amount ?? 0;
@@ -233,7 +266,7 @@ export function DataPaymentFlow() {
             <div>
               <FieldLabel>Network</FieldLabel>
               <ProviderTiles
-                options={AIRTIME_NETWORKS}
+                options={networkTiles}
                 value={network}
                 onChange={(next) => {
                   setNetwork(next);

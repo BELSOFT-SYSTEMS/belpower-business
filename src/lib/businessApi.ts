@@ -464,6 +464,17 @@ export const businessTransactionsApi = {
       auth: true,
     });
   },
+
+  requery(id: string) {
+    return businessApiRequest<{
+      transaction: BusinessTransactionListItem;
+      message?: string;
+      requery?: unknown;
+    }>(`/transactions/${id}/requery`, {
+      method: 'POST',
+      auth: true,
+    });
+  },
 };
 
 export const businessBranchesApi = {
@@ -511,6 +522,19 @@ export const businessBranchesApi = {
       method: 'POST',
       auth: true,
       body: JSON.stringify(payload),
+    });
+  },
+
+  updateStatus(id: string, status: 'active' | 'inactive') {
+    return businessApiRequest<{
+      id: string;
+      name: string;
+      status: string;
+      isHeadOffice: boolean;
+    }>(`/branches/${id}`, {
+      method: 'PATCH',
+      auth: true,
+      body: JSON.stringify({ status }),
     });
   },
 };
@@ -651,6 +675,28 @@ export const businessWalletApi = {
       expiresAt?: string | null;
     }>(`/wallet/fund/status/${encodeURIComponent(transactionId)}`, {
       method: 'GET',
+      auth: true,
+    });
+  },
+
+  freeze(walletId: string) {
+    return businessApiRequest<{
+      id: string;
+      status: string;
+      isFrozen: boolean;
+    }>(`/wallet/${encodeURIComponent(walletId)}/freeze`, {
+      method: 'POST',
+      auth: true,
+    });
+  },
+
+  unfreeze(walletId: string) {
+    return businessApiRequest<{
+      id: string;
+      status: string;
+      isFrozen: boolean;
+    }>(`/wallet/${encodeURIComponent(walletId)}/unfreeze`, {
+      method: 'POST',
       auth: true,
     });
   },

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { MoreVertical, Trash2, UserPlus } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { toast } from 'sonner';
@@ -17,34 +17,64 @@ import {
   isSuperAdminRole,
   roleRequiresBranch,
 } from '@/constants/businessRoles';
-import { getMockBranchesForRole, getMockTeamForRole, HEAD_OFFICE_BRANCH_ID } from '@/data/businessMocks';
+import { BusinessApiError } from '@/lib/businessApi';
+import { businessBranchesApi } from '@/lib/businessApi';
+import { businessTeamApi } from '@/lib/businessTeamApi';
 import { formatAdminRoleLabel, formatRoleScopeLabel } from '@/utils/businessRoleDisplay';
-import type { BusinessRole, BusinessTeamMember } from '@/types/business';
+import type { BusinessBranch, BusinessRole, BusinessTeamMember } from '@/types/business';
 
 export default function TeamPage() {
   const { user, demoRole, canAccess } = useBusinessAuth();
   const role = user?.role ?? demoRole;
-  const branches = getMockBranchesForRole(role);
   const assignableRoles = getAssignableRolesForInviter(role);
   const canInvite = canAccess('team.invite') && assignableRoles.length > 0;
-  const canManageTeam = canAccess('team.manage') && isSuperAdminRole(role);
+  const canManageTeam = canAccess('team.manage');
 
-  const [team, setTeam] = useState<BusinessTeamMember[]>(() => getMockTeamForRole(role));
+  const [team, setTeam] = useState<BusinessTeamMember[]>([]);
+  const [branches, setBranches] = useState<BusinessBranch[]>([]);
+  const [loading, setLoading] = useState(true);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<BusinessTeamMember | null>(null);
+  const [suspendTarget, setSuspendTarget] = useState<BusinessTeamMember | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [members, branchRows] = await Promise.all([
+        businessTeamApi.list(),
+        businessBranchesApi.list().catch(() => []),
+      ]);
+      setTeam(members);
+      setBranches(
+        branchRows.map((b) => ({
+          id: b.id,
+          name: b.name,
+          code: b.code || '',
+          address: b.address || '',
+          city: b.city || '',
+          isHeadOffice: Boolean(b.isHeadOffice),
+          userCount: b.userCount,
+          meterCount: b.meterCount,
+          status: b.status === 'inactive' ? 'inactive' : 'active',
+        })),
+      );
+    } catch (error) {
+      toast.error(error instanceof BusinessApiError ? error.message : 'Could not load team');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    setTeam(getMockTeamForRole(role));
-    setMenuOpenId(null);
-    setDeleteTarget(null);
-  }, [role]);
+    void load();
+  }, [load]);
 
   const inviteBranches = useMemo(() => {
-    if (isSuperAdminRole(role)) {
-      return branches;
-    }
+    if (isSuperAdminRole(role)) return branches;
     if (isBranchAdminRole(role)) {
-      return branches.filter((branch) => branch.id === user?.branchId || branch.name === user?.branchName);
+      return branches.filter(
+        (branch) => branch.id === user?.branchId || branch.name === user?.branchName,
+      );
     }
     return branches;
   }, [branches, role, user?.branchId, user?.branchName]);
@@ -53,76 +83,105 @@ export default function TeamPage() {
     ? 'branch_operations'
     : (assignableRoles[0] ?? 'branch_operations');
 
-  const defaultInviteBranch =
-    inviteBranches.find((branch) => branch.id === user?.branchId)?.name ??
-    inviteBranches.find((branch) => !branch.isHeadOffice)?.name ??
-    inviteBranches[0]?.name ??
+  const defaultInviteBranchId =
+    inviteBranches.find((branch) => branch.id === user?.branchId)?.id ??
+    inviteBranches.find((branch) => !branch.isHeadOffice)?.id ??
+    inviteBranches[0]?.id ??
     '';
 
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteRole, setInviteRole] = useState<BusinessRole>(defaultInviteRole);
-  const [inviteBranch, setInviteBranch] = useState(defaultInviteBranch);
+  const [inviteBranchId, setInviteBranchId] = useState(defaultInviteBranchId);
+  const [inviting, setInviting] = useState(false);
 
   const needsBranch = roleRequiresBranch(inviteRole);
   const branchOptions = useMemo(() => {
     if (!needsBranch) {
-      return branches
-        .filter((branch) => branch.id === HEAD_OFFICE_BRANCH_ID || branch.isHeadOffice)
-        .map((branch) => ({ value: branch.name, label: branch.name }));
+      return [{ value: '', label: 'Head Office (company-wide)' }];
     }
     return inviteBranches
       .filter((branch) => !branch.isHeadOffice)
-      .map((branch) => ({ value: branch.name, label: branch.name }));
-  }, [branches, inviteBranches, needsBranch]);
+      .map((branch) => ({ value: branch.id, label: branch.name }));
+  }, [inviteBranches, needsBranch]);
 
   const resetInviteForm = () => {
     setInviteRole(defaultInviteRole);
-    if (roleRequiresBranch(defaultInviteRole)) {
-      setInviteBranch(defaultInviteBranch);
-    } else {
-      setInviteBranch(branches.find((branch) => branch.isHeadOffice)?.name ?? 'Head Office');
-    }
+    setInviteBranchId(roleRequiresBranch(defaultInviteRole) ? defaultInviteBranchId : '');
   };
 
   const handleInviteRoleChange = (value: string) => {
     const nextRole = value as BusinessRole;
     setInviteRole(nextRole);
     if (roleRequiresBranch(nextRole)) {
-      setInviteBranch(
-        inviteBranches.find((branch) => !branch.isHeadOffice)?.name ?? defaultInviteBranch,
+      setInviteBranchId(
+        inviteBranches.find((branch) => !branch.isHeadOffice)?.id ?? defaultInviteBranchId,
       );
     } else {
-      setInviteBranch(branches.find((branch) => branch.isHeadOffice)?.name ?? 'Head Office');
+      setInviteBranchId('');
     }
   };
 
-  const handleInvite = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleInvite = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     const email = String(form.get('email') ?? '').trim();
-    const roleValue = String(form.get('role') ?? defaultInviteRole);
-    const branchValue = String(form.get('branch') ?? '');
-    setInviteOpen(false);
-    resetInviteForm();
-    toast.success(`Invitation sent to ${email} (demo)`);
-    toast.message(
-      `Invite link: /business/accept-invite?email=${encodeURIComponent(email)}&role=${roleValue}&branch=${encodeURIComponent(branchValue)}`,
-    );
+    setInviting(true);
+    try {
+      const result = await businessTeamApi.invite({
+        email,
+        role: inviteRole,
+        branchId: needsBranch ? inviteBranchId || null : null,
+      });
+      setInviteOpen(false);
+      resetInviteForm();
+      toast.success(`Invitation sent to ${email}`);
+      if (result.inviteUrl) {
+        toast.message(`Invite link: ${result.inviteUrl}`);
+      }
+      await load();
+    } catch (error) {
+      toast.error(error instanceof BusinessApiError ? error.message : 'Invite failed');
+    } finally {
+      setInviting(false);
+    }
   };
 
   const memberCanBeDeleted = (member: BusinessTeamMember) =>
     canDeleteTeamMember(role, member.role, {
       actorUserId: user?.id,
       targetUserId: member.id,
-    });
+    }) || (canManageTeam && member.id !== user?.id && member.role !== 'super_admin');
 
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (!deleteTarget || !memberCanBeDeleted(deleteTarget)) return;
     const name = `${deleteTarget.firstName} ${deleteTarget.lastName}`;
-    setTeam((current) => current.filter((member) => member.id !== deleteTarget.id));
-    setDeleteTarget(null);
-    setMenuOpenId(null);
-    toast.success(`${name} removed from team (demo)`);
+    try {
+      await businessTeamApi.remove(deleteTarget.id);
+      setDeleteTarget(null);
+      setMenuOpenId(null);
+      toast.success(`${name} removed from team`);
+      await load();
+    } catch (error) {
+      toast.error(error instanceof BusinessApiError ? error.message : 'Could not remove member');
+    }
+  };
+
+  const handleConfirmSuspend = async () => {
+    if (!suspendTarget || !canManageTeam) return;
+    const nextStatus = suspendTarget.status === 'suspended' ? 'active' : 'suspended';
+    try {
+      await businessTeamApi.update(suspendTarget.id, { status: nextStatus });
+      toast.success(
+        nextStatus === 'suspended'
+          ? `${suspendTarget.firstName} suspended`
+          : `${suspendTarget.firstName} reactivated`,
+      );
+      setSuspendTarget(null);
+      setMenuOpenId(null);
+      await load();
+    } catch (error) {
+      toast.error(error instanceof BusinessApiError ? error.message : 'Could not update member');
+    }
   };
 
   return (
@@ -132,7 +191,7 @@ export default function TeamPage() {
           title="Team management"
           description={
             isSuperAdminRole(role)
-              ? 'Create Head Office and branch roles across the company. Remove any member except Super Admin when needed.'
+              ? 'Create Head Office and branch roles across the company.'
               : isBranchAdminRole(role)
                 ? `Invite Admin, Finance, Ops, and Viewer for ${user?.branchName ?? 'your branch'} only.`
                 : 'View team members for your scope.'
@@ -153,7 +212,9 @@ export default function TeamPage() {
         )}
       </div>
 
-      {team.length === 0 ? (
+      {loading ? (
+        <p className="text-sm text-gray-500">Loading team…</p>
+      ) : team.length === 0 ? (
         <EmptyState
           title="No team members yet"
           description="Invite colleagues to help manage utility payments."
@@ -191,6 +252,11 @@ export default function TeamPage() {
               <tbody className="divide-y divide-gray-100">
                 {team.map((member) => {
                   const canDelete = canManageTeam && memberCanBeDeleted(member);
+                  const canSuspend =
+                    canManageTeam &&
+                    member.id !== user?.id &&
+                    member.role !== 'super_admin' &&
+                    member.status !== 'invited';
                   return (
                     <tr key={member.id} className="hover:bg-gray-50/80">
                       <td className="whitespace-nowrap px-4 py-3 font-medium text-gray-900">
@@ -216,7 +282,7 @@ export default function TeamPage() {
                       </td>
                       {canManageTeam ? (
                         <td className="whitespace-nowrap px-4 py-3 text-right">
-                          {canDelete ? (
+                          {canDelete || canSuspend ? (
                             <div className="relative inline-flex justify-end">
                               <button
                                 type="button"
@@ -232,17 +298,31 @@ export default function TeamPage() {
                               </button>
                               {menuOpenId === member.id ? (
                                 <div className="absolute right-0 top-full z-20 mt-1 w-44 rounded-xl border border-gray-200 bg-white py-1 shadow-lg">
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setMenuOpenId(null);
-                                      setDeleteTarget(member);
-                                    }}
-                                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50"
-                                  >
-                                    <Trash2 className="h-3.5 w-3.5" />
-                                    Remove member
-                                  </button>
+                                  {canSuspend ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setMenuOpenId(null);
+                                        setSuspendTarget(member);
+                                      }}
+                                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                                    >
+                                      {member.status === 'suspended' ? 'Reactivate' : 'Suspend'}
+                                    </button>
+                                  ) : null}
+                                  {canDelete ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setMenuOpenId(null);
+                                        setDeleteTarget(member);
+                                      }}
+                                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50"
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                      Remove member
+                                    </button>
+                                  ) : null}
                                 </div>
                               ) : null}
                             </div>
@@ -268,7 +348,7 @@ export default function TeamPage() {
             ? 'Assign a Head Office or branch role, then send the invite.'
             : 'Invite someone to your branch with a branch-level role.'
         }
-        submitLabel="Send invitation"
+        submitLabel={inviting ? 'Sending…' : 'Send invitation'}
         onClose={() => {
           setInviteOpen(false);
           resetInviteForm();
@@ -293,13 +373,13 @@ export default function TeamPage() {
         />
         <BusinessSelect
           name="branch"
-          value={inviteBranch}
-          onChange={setInviteBranch}
-          disabled={isBranchAdminRole(role) || (!needsBranch && !isSuperAdminRole(role))}
+          value={inviteBranchId}
+          onChange={setInviteBranchId}
+          disabled={isBranchAdminRole(role) || !needsBranch}
           options={
             branchOptions.length > 0
               ? branchOptions
-              : [{ value: inviteBranch || 'Head Office', label: inviteBranch || 'Head Office' }]
+              : [{ value: inviteBranchId || '', label: 'No branches available' }]
           }
         />
       </BusinessFormModal>
@@ -309,18 +389,39 @@ export default function TeamPage() {
         title="Remove team member"
         description={
           deleteTarget
-            ? `Remove ${deleteTarget.firstName} ${deleteTarget.lastName} (${formatAdminRoleLabel(deleteTarget.role)}) from ${deleteTarget.branchName ?? 'this branch'}?`
+            ? `Remove ${deleteTarget.firstName} ${deleteTarget.lastName} (${formatAdminRoleLabel(deleteTarget.role)})?`
             : 'Remove this team member?'
         }
         submitLabel="Remove member"
         onClose={() => setDeleteTarget(null)}
         onSubmit={(event) => {
           event.preventDefault();
-          handleConfirmDelete();
+          void handleConfirmDelete();
         }}
       >
         <p className="text-sm text-gray-600">
-          This demo action only updates the list locally. Super Admin accounts cannot be removed.
+          This deactivates their access. Super Admin accounts cannot be removed when they are the
+          last one.
+        </p>
+      </BusinessFormModal>
+
+      <BusinessFormModal
+        open={Boolean(suspendTarget) && canManageTeam}
+        title={suspendTarget?.status === 'suspended' ? 'Reactivate member' : 'Suspend member'}
+        description={
+          suspendTarget
+            ? `${suspendTarget.status === 'suspended' ? 'Reactivate' : 'Suspend'} ${suspendTarget.firstName} ${suspendTarget.lastName}?`
+            : 'Update member status?'
+        }
+        submitLabel={suspendTarget?.status === 'suspended' ? 'Reactivate' : 'Suspend'}
+        onClose={() => setSuspendTarget(null)}
+        onSubmit={(event) => {
+          event.preventDefault();
+          void handleConfirmSuspend();
+        }}
+      >
+        <p className="text-sm text-gray-600">
+          Suspended members cannot sign in until reactivated.
         </p>
       </BusinessFormModal>
     </div>

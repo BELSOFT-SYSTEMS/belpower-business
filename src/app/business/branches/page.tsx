@@ -145,27 +145,49 @@ export default function BranchesPage() {
     }
   };
 
-  const handleToggleStatus = (branch: BusinessBranch) => {
+  const handleToggleStatus = async (branch: BusinessBranch) => {
     if (!isSuperAdmin) return;
     const nextStatus = branch.status === 'active' ? 'inactive' : 'active';
-    setBranches((current) =>
-      current.map((item) => (item.id === branch.id ? { ...item, status: nextStatus } : item)),
-    );
     setMenuOpenId(null);
-    toast.success(
-      nextStatus === 'active'
-        ? `${branch.name} enabled (demo)`
-        : `${branch.name} disabled (demo)`,
-    );
+    try {
+      await businessBranchesApi.updateStatus(branch.id, nextStatus);
+      setBranches((current) =>
+        current.map((item) => (item.id === branch.id ? { ...item, status: nextStatus } : item)),
+      );
+      toast.success(
+        nextStatus === 'active' ? `${branch.name} enabled` : `${branch.name} disabled`,
+      );
+      try {
+        await refreshMe();
+      } catch {
+        // ignore
+      }
+    } catch (error) {
+      toast.error(error instanceof BusinessApiError ? error.message : 'Could not update branch');
+    }
   };
 
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (!isSuperAdmin || !deleteTarget) return;
     const name = deleteTarget.name;
-    setBranches((current) => current.filter((branch) => branch.id !== deleteTarget.id));
-    setDeleteTarget(null);
-    setMenuOpenId(null);
-    toast.success(`${name} deleted (demo)`);
+    try {
+      await businessBranchesApi.updateStatus(deleteTarget.id, 'inactive');
+      setBranches((current) =>
+        current.map((branch) =>
+          branch.id === deleteTarget.id ? { ...branch, status: 'inactive' } : branch,
+        ),
+      );
+      setDeleteTarget(null);
+      setMenuOpenId(null);
+      toast.success(`${name} disabled`);
+      try {
+        await refreshMe();
+      } catch {
+        // ignore
+      }
+    } catch (error) {
+      toast.error(error instanceof BusinessApiError ? error.message : 'Could not disable branch');
+    }
   };
 
   return (
@@ -361,7 +383,7 @@ export default function BranchesPage() {
                                   className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50"
                                 >
                                   <Trash2 className="h-3.5 w-3.5" />
-                                  Delete branch
+                                  Disable branch
                                 </button>
                               </div>
                             ) : null}
@@ -390,22 +412,21 @@ export default function BranchesPage() {
 
       <BusinessFormModal
         open={Boolean(deleteTarget) && isSuperAdmin}
-        title="Delete branch"
+        title="Disable branch"
         description={
           deleteTarget
-            ? `Permanently remove ${deleteTarget.name}? This demo action only updates the list locally.`
-            : 'Remove this branch?'
+            ? `Disable ${deleteTarget.name}? The branch wallet will be set inactive. This can be reversed by enabling the branch again.`
+            : 'Disable this branch?'
         }
-        submitLabel="Delete branch"
+        submitLabel="Disable branch"
         onClose={() => setDeleteTarget(null)}
         onSubmit={(event) => {
           event.preventDefault();
-          handleConfirmDelete();
+          void handleConfirmDelete();
         }}
       >
         <p className="text-sm text-gray-600">
-          Team members and allocated balances for this branch will need to be reassigned in a live
-          system before deletion.
+          Disabling sets the branch and its wallet to inactive. You can enable it again later.
         </p>
       </BusinessFormModal>
     </div>

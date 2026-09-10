@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import {
   BarChart3,
   Building2,
+  CalendarClock,
   ChevronLeft,
   ChevronRight,
   CreditCard,
@@ -34,6 +35,7 @@ const NAV_ICONS: Record<string, ReactNode> = {
   '/business/beneficiaries': <Users size={18} />,
   '/business/transactions': <Receipt size={18} />,
   '/business/analytics': <BarChart3 size={18} />,
+  '/business/schedules': <CalendarClock size={18} />,
   '/business/team': <Users size={18} />,
   '/business/settings': <Settings size={18} />,
 };
@@ -123,41 +125,56 @@ export function BusinessSidebar({ onNavigate }: { onNavigate?: () => void }) {
 
               return (
                 <li key={item.href}>
-                  <Link
-                    href={item.href}
-                    title={sidebarCollapsed ? item.name : undefined}
-                    onClick={(event) => {
-                      if (item.children?.length && sectionActive && expanded) {
-                        event.preventDefault();
-                        setCollapsedSections((current) => ({
-                          ...current,
-                          [item.href]: true,
-                        }));
-                        return;
-                      }
-
-                      if (item.children?.length) {
-                        setCollapsedSections((current) => {
-                          const next = { ...current };
-                          delete next[item.href];
-                          return next;
-                        });
-                      }
-
-                      onNavigate?.();
-                    }}
-                    className={cn(
-                      'business_sidebar_nav_link rounded-lg px-3 py-2 text-sm font-medium transition-colors',
-                      sectionActive
-                        ? 'bg-blue-normal text-white'
-                        : 'text-gray-700 hover:bg-gray-100'
-                    )}
-                  >
-                    <span className="business_sidebar_nav_icon">
-                      {NAV_ICONS[item.href] ?? <LayoutDashboard size={18} />}
+                  {item.locked && !item.children?.length ? (
+                    <span
+                      title="Coming soon"
+                      className="business_sidebar_nav_link cursor-not-allowed rounded-lg px-3 py-2 text-sm font-medium text-gray-400"
+                    >
+                      <span className="business_sidebar_nav_icon">
+                        {NAV_ICONS[item.href] ?? <LayoutDashboard size={18} />}
+                      </span>
+                      <span className="business_sidebar_nav_label flex flex-1 items-center justify-between gap-2">
+                        <span>{item.name}</span>
+                        <Lock className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                      </span>
                     </span>
-                    <span className="business_sidebar_nav_label">{item.name}</span>
-                  </Link>
+                  ) : (
+                    <Link
+                      href={item.href}
+                      title={sidebarCollapsed ? item.name : undefined}
+                      onClick={(event) => {
+                        if (item.children?.length && sectionActive && expanded) {
+                          event.preventDefault();
+                          setCollapsedSections((current) => ({
+                            ...current,
+                            [item.href]: true,
+                          }));
+                          return;
+                        }
+
+                        if (item.children?.length) {
+                          setCollapsedSections((current) => {
+                            const next = { ...current };
+                            delete next[item.href];
+                            return next;
+                          });
+                        }
+
+                        onNavigate?.();
+                      }}
+                      className={cn(
+                        'business_sidebar_nav_link rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+                        sectionActive
+                          ? 'bg-blue-normal text-white'
+                          : 'text-gray-700 hover:bg-gray-100'
+                      )}
+                    >
+                      <span className="business_sidebar_nav_icon">
+                        {NAV_ICONS[item.href] ?? <LayoutDashboard size={18} />}
+                      </span>
+                      <span className="business_sidebar_nav_label">{item.name}</span>
+                    </Link>
+                  )}
                   {item.children && expanded && (
                     <ul className="business_sidebar_children ml-3 mt-1 space-y-0.5 border-l border-gray-200 pl-3">
                       {item.children

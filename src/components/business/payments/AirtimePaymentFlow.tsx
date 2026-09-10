@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { PageHeader } from '@/components/business/PageHeader';
@@ -21,6 +21,7 @@ import {
   normalizeBusinessPhone,
   paymentErrorMessage,
 } from '@/lib/businessPaymentsApi';
+import { mapNetworkProviderOptions } from '@/utils/businessPaymentCatalog';
 import { formatPrice } from '@/utils/formatPrice';
 import { cn } from '@/lib/utils';
 import {
@@ -38,15 +39,47 @@ import {
 
 type View = 'form' | 'success' | 'failed' | 'pending';
 
+const FALLBACK_NETWORKS = AIRTIME_NETWORKS.map((item) => ({ ...item, available: true }));
+
 export function AirtimePaymentFlow() {
   const params = useSearchParams();
   const session = usePaymentSession();
   const [view, setView] = useState<View>('form');
   const [network, setNetwork] = useState(params.get('network')?.toLowerCase() || 'mtn');
+  const [networkOptions, setNetworkOptions] = useState(FALLBACK_NETWORKS);
   const [phone, setPhone] = useState(params.get('phoneNumber') ?? '');
   const [amountInput, setAmountInput] = useState(params.get('amount') ?? '');
   const [pending, setPending] = useState(false);
   const [result, setResult] = useState<{ reference: string; status: string } | null>(null);
+
+  const networkTiles = useMemo(() => {
+    const available = networkOptions.filter((item) => item.available);
+    const source = available.length > 0 ? available : networkOptions;
+    return source.map(({ id, name, logo }) => ({ id, name, logo }));
+  }, [networkOptions]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const status = await businessPaymentsApi.networkProviders();
+        if (cancelled) return;
+        const next = mapNetworkProviderOptions(status, AIRTIME_NETWORKS);
+        const options = next.length > 0 ? next : FALLBACK_NETWORKS;
+        setNetworkOptions(options);
+        setNetwork((current) => {
+          const available = options.filter((item) => item.available);
+          const source = available.length > 0 ? available : options;
+          return source.find((item) => item.id === current)?.id ?? source[0]?.id ?? current;
+        });
+      } catch {
+        if (!cancelled) setNetworkOptions(FALLBACK_NETWORKS);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const amount = useMemo(() => Number(amountInput.replace(/,/g, '').trim()) || 0, [amountInput]);
   const phoneOk = isValidNigerianPhone(phone);
@@ -177,7 +210,7 @@ export function AirtimePaymentFlow() {
 
             <div>
               <FieldLabel>Network</FieldLabel>
-              <ProviderTiles options={AIRTIME_NETWORKS} value={network} onChange={setNetwork} />
+              <ProviderTiles options={networkTiles} value={network} onChange={setNetwork} />
               {detected && detected !== network ? (
                 <button
                   type="button"

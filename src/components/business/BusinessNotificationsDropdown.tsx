@@ -6,6 +6,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useBusinessAuth } from '@/context/BusinessAuthContext';
 import { MOCK_NOTIFICATIONS } from '@/data/businessMocks';
+import { businessNotificationsApi } from '@/lib/businessNotificationsApi';
 import type { BusinessNotification } from '@/types/business';
 
 const typeStyles = {
@@ -25,7 +26,7 @@ function normalizeType(type: string): BusinessNotification['type'] {
 }
 
 export function BusinessNotificationsDropdown() {
-  const { dashboardBootstrap, isAuthenticated } = useBusinessAuth();
+  const { dashboardBootstrap, isAuthenticated, refreshMe } = useBusinessAuth();
   const [open, setOpen] = useState(false);
   const [localReads, setLocalReads] = useState<Record<string, boolean>>({});
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -84,6 +85,17 @@ export function BusinessNotificationsDropdown() {
   const toggleNotification = (id: string) => {
     setLocalReads((current) => ({ ...current, [id]: true }));
     setExpandedId((current) => (current === id ? null : id));
+
+    if (isAuthenticated) {
+      void (async () => {
+        try {
+          await businessNotificationsApi.markRead(id);
+          await refreshMe();
+        } catch {
+          // Keep optimistic localReads; refresh may still catch up later.
+        }
+      })();
+    }
   };
 
   const markAllAsRead = () => {
@@ -92,6 +104,17 @@ export function BusinessNotificationsDropdown() {
       next[notification.id] = true;
     }
     setLocalReads(next);
+
+    if (isAuthenticated) {
+      void (async () => {
+        try {
+          await businessNotificationsApi.markAllRead();
+          await refreshMe();
+        } catch {
+          // Keep optimistic localReads; refresh may still catch up later.
+        }
+      })();
+    }
   };
 
   return (

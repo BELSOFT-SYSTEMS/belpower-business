@@ -8,6 +8,8 @@ const styles = {
   failed: 'bg-red-50 text-red-normal',
   suspended: 'bg-red-50 text-red-normal',
   inactive: 'bg-gray-normal text-gray',
+  paused: 'bg-amber-50 text-amber-700',
+  cancelled: 'bg-gray-normal text-gray',
   credit: 'bg-green-light text-green-normal',
   debit: 'bg-red-50 text-red-normal',
 } as const;

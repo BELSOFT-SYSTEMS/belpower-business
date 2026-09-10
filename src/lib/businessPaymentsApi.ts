@@ -190,6 +190,36 @@ export const businessPaymentsApi = {
     }
     return {};
   },
+
+  async networkProviders(): Promise<Record<string, boolean>> {
+    const data = await businessApiRequest<unknown>('/payments/providers/network', {
+      method: 'GET',
+      auth: true,
+    });
+    if (data && typeof data === 'object' && !Array.isArray(data)) {
+      const record = data as Record<string, unknown>;
+      if (record.data && typeof record.data === 'object' && !Array.isArray(record.data)) {
+        return record.data as Record<string, boolean>;
+      }
+      return data as Record<string, boolean>;
+    }
+    return {};
+  },
+
+  async cableProviders(): Promise<Record<string, boolean>> {
+    const data = await businessApiRequest<unknown>('/payments/providers/cable', {
+      method: 'GET',
+      auth: true,
+    });
+    if (data && typeof data === 'object' && !Array.isArray(data)) {
+      const record = data as Record<string, unknown>;
+      if (record.data && typeof record.data === 'object' && !Array.isArray(record.data)) {
+        return record.data as Record<string, boolean>;
+      }
+      return data as Record<string, boolean>;
+    }
+    return {};
+  },
 };
 
 export function paymentErrorMessage(error: unknown, fallback: string): string {

@@ -226,7 +226,49 @@ export function WalletStatementsFlow() {
         {canExport && (
           <button
             type="button"
-            onClick={() => toast.success('Statement export will be available soon')}
+            onClick={() => {
+              if (filteredStatements.length === 0) {
+                toast.message('No statement rows to export');
+                return;
+              }
+              const header = [
+                'Date',
+                'Reference',
+                'Type',
+                'Description',
+                'Amount',
+                'Balance Before',
+                'Balance After',
+                'Branch',
+                'Performed By',
+                'Role',
+                'Status',
+              ];
+              const lines = filteredStatements.map((row) =>
+                [
+                  row.createdAt,
+                  row.reference,
+                  row.type,
+                  `"${String(row.description || '').replace(/"/g, '""')}"`,
+                  row.amount,
+                  row.balanceBefore,
+                  row.balanceAfter,
+                  row.branchName ?? '',
+                  `"${String(row.performedByName || '').replace(/"/g, '""')}"`,
+                  row.performedByRole ?? '',
+                  row.status,
+                ].join(','),
+              );
+              const csv = [header.join(','), ...lines].join('\n');
+              const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+              const url = URL.createObjectURL(blob);
+              const link = document.createElement('a');
+              link.href = url;
+              link.download = `wallet-statements-${format(new Date(), 'yyyy-MM-dd')}.csv`;
+              link.click();
+              URL.revokeObjectURL(url);
+              toast.success('Statement CSV downloaded');
+            }}
             className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
           >
             <Download className="h-4 w-4" />

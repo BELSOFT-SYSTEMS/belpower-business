@@ -310,7 +310,8 @@ export function BusinessTransactionDetailModal({
         return;
       }
 
-      toast.message('Requery for utility payments will be available soon');
+      const result = await businessTransactionsApi.requery(transaction.id);
+      toast.success(result.message || 'Requery completed');
       await reloadDetail();
     } catch (error) {
       toast.error(

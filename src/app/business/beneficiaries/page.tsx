@@ -25,12 +25,23 @@ import {
   getProviderName,
   isValidNigerianPhone,
   mockLookupMeter,
-  mockLookupSmartcard,
   normalizePhone,
   resolveDiscoCode,
   type CableProviderId,
   type MeterType,
 } from '@/data/mockPaymentCatalog';
+import { DISCO_NAMES } from '@/constants/discoNames';
+import { businessBeneficiariesApi } from '@/lib/businessBeneficiariesApi';
+import { businessPaymentsApi, paymentErrorMessage } from '@/lib/businessPaymentsApi';
+import {
+  mapCableProviderOptions,
+  mapNetworkProviderOptions,
+  meterCustomerAddress,
+  meterCustomerName,
+  normalizeElectricityDiscoMap,
+  parseMeterVerifyCustomerData,
+  type CatalogProviderOption,
+} from '@/utils/businessPaymentCatalog';
 import {
   BeneficiaryGroupCard,
 } from '@/components/business/beneficiaries/BeneficiaryGroupCard';
@@ -43,6 +54,30 @@ import type { BeneficiaryGroup, BeneficiaryGroupMember, BusinessBeneficiary } fr
 import { cn } from '@/lib/utils';
 
 const METER_VERIFY_MIN_DIGITS = 10;
+
+const FALLBACK_DISCO_OPTIONS = ELECTRICITY_DISCOS.map((item) => ({
+  code: item.id,
+  name: item.name,
+  available: true,
+}));
+
+const FALLBACK_NETWORK_OPTIONS: CatalogProviderOption[] = AIRTIME_NETWORKS.map((item) => ({
+  ...item,
+  available: true,
+}));
+
+const FALLBACK_CABLE_OPTIONS: CatalogProviderOption[] = CABLE_PROVIDERS.filter(
+  (item) => item.id !== 'showmax',
+).map((item) => ({
+  ...item,
+  available: true,
+}));
+
+function providerTileOptions(options: CatalogProviderOption[]) {
+  const available = options.filter((item) => item.available);
+  const source = available.length > 0 ? available : options;
+  return source.map(({ id, name, logo }) => ({ id, name, logo }));
+}
 
 type BeneficiaryService = BusinessBeneficiary['service'];
 type AddMode = 'single' | 'group';
@@ -107,7 +142,8 @@ const SERVICE_TABS: {
 ];
 
 export default function BeneficiariesPage() {
-  const { user, demoRole, canAccess, isAuthenticated, dashboardBootstrap } = useBusinessAuth();
+  const { user, demoRole, canAccess, isAuthenticated, dashboardBootstrap, refreshMe } =
+    useBusinessAuth();
   const role = user?.role ?? demoRole;
   const branches = useMemo(() => {
     if (isAuthenticated) {
@@ -131,9 +167,12 @@ export default function BeneficiariesPage() {
   );
   const [groups, setGroups] = useState<BeneficiaryGroup[]>(() =>
     isAuthenticated ? [] : getMockBeneficiaryGroupsForRole(role),
-  );  const [isAdding, setIsAdding] = useState(false);
+  );
+  const [isAdding, setIsAdding] = useState(false);
   const [addMode, setAddMode] = useState<AddMode>('single');
-  const [phoneSubTab, setPhoneSubTab] = useState<PhoneSubTab>('groups');
+  const [phoneSubTab, setPhoneSubTab] = useState<PhoneSubTab>(
+    isAuthenticated ? 'singles' : 'groups',
+  );
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const [groupMenuOpenId, setGroupMenuOpenId] = useState<string | null>(null);
   const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null);
@@ -144,17 +183,23 @@ export default function BeneficiariesPage() {
 
   const [title, setTitle] = useState('');
   const [disco, setDisco] = useState(ELECTRICITY_DISCOS[0]?.id ?? 'ABUJA');
+  const [discoOptions, setDiscoOptions] = useState(FALLBACK_DISCO_OPTIONS);
   const [meterType, setMeterType] = useState<MeterType>('prepaid');
   const [meterNumber, setMeterNumber] = useState('');
   const [network, setNetwork] = useState(AIRTIME_NETWORKS[0]?.id ?? 'mtn');
+  const [networkOptions, setNetworkOptions] =
+    useState<CatalogProviderOption[]>(FALLBACK_NETWORK_OPTIONS);
   const [phone, setPhone] = useState('');
   const [cableProvider, setCableProvider] = useState<CableProviderId>('dstv');
+  const [cableOptions, setCableOptions] =
+    useState<CatalogProviderOption[]>(FALLBACK_CABLE_OPTIONS);
   const [smartCard, setSmartCard] = useState('');
   const [branchName, setBranchName] = useState(branches[0]?.name ?? '');
   const [lookupName, setLookupName] = useState('');
   const [lookupAddress, setLookupAddress] = useState('');
   const [lookingUp, setLookingUp] = useState(false);
   const [verifyError, setVerifyError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
   const verifyRequestRef = useRef(0);
   const addFormRef = useRef<HTMLFormElement | null>(null);
 
@@ -188,19 +233,93 @@ export default function BeneficiariesPage() {
         : serviceItems.length > 0
       : serviceItems.length > 0 || serviceGroups.length > 0;
 
-  const discoOptions = useMemo(
-    () => ELECTRICITY_DISCOS.map((item) => ({ code: item.id, name: item.name, available: true })),
-    [],
+  const networkTileOptions = useMemo(
+    () => providerTileOptions(networkOptions),
+    [networkOptions],
   );
+  const cableTileOptions = useMemo(() => providerTileOptions(cableOptions), [cableOptions]);
 
   const startAdding = (mode?: AddMode) => {
     const nextMode =
-      mode ??
-      (supportsGroups(service) && phoneSubTab === 'groups' ? 'group' : 'single');
+      isAuthenticated
+        ? 'single'
+        : (mode ??
+          (supportsGroups(service) && phoneSubTab === 'groups' ? 'group' : 'single'));
     resetAddForm();
-    setAddMode(supportsGroups(service) ? nextMode : 'single');
+    setAddMode(supportsGroups(service) && !isAuthenticated ? nextMode : 'single');
     setIsAdding(true);
   };
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setDiscoOptions(FALLBACK_DISCO_OPTIONS);
+      setNetworkOptions(FALLBACK_NETWORK_OPTIONS);
+      setCableOptions(FALLBACK_CABLE_OPTIONS);
+      return;
+    }
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const [electricity, networks, cables] = await Promise.all([
+          businessPaymentsApi.electricityProviders(),
+          businessPaymentsApi.networkProviders(),
+          businessPaymentsApi.cableProviders(),
+        ]);
+        if (cancelled) return;
+
+        const nextDiscos = normalizeElectricityDiscoMap(electricity, DISCO_NAMES);
+        if (nextDiscos.length > 0) {
+          setDiscoOptions(nextDiscos);
+          setDisco((current) => {
+            const resolved = resolveDiscoCode(current);
+            const match = nextDiscos.find((item) => item.code === resolved && item.available);
+            if (match) return match.code;
+            return nextDiscos.find((item) => item.available)?.code ?? resolved;
+          });
+        } else {
+          setDiscoOptions(FALLBACK_DISCO_OPTIONS);
+        }
+
+        const nextNetworks = mapNetworkProviderOptions(networks, AIRTIME_NETWORKS);
+        setNetworkOptions(nextNetworks.length > 0 ? nextNetworks : FALLBACK_NETWORK_OPTIONS);
+        setNetwork((current) => {
+          const tiles = providerTileOptions(
+            nextNetworks.length > 0 ? nextNetworks : FALLBACK_NETWORK_OPTIONS,
+          );
+          return tiles.find((item) => item.id === current)?.id ?? tiles[0]?.id ?? current;
+        });
+
+        const nextCables = mapCableProviderOptions(cables, CABLE_PROVIDERS);
+        setCableOptions(nextCables.length > 0 ? nextCables : FALLBACK_CABLE_OPTIONS);
+        setCableProvider((current) => {
+          const tiles = providerTileOptions(
+            nextCables.length > 0 ? nextCables : FALLBACK_CABLE_OPTIONS,
+          );
+          const match = tiles.find((item) => item.id === current)?.id;
+          return (match ?? tiles[0]?.id ?? current) as CableProviderId;
+        });
+      } catch {
+        if (!cancelled) {
+          setDiscoOptions(FALLBACK_DISCO_OPTIONS);
+          setNetworkOptions(FALLBACK_NETWORK_OPTIONS);
+          setCableOptions(FALLBACK_CABLE_OPTIONS);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      setPhoneSubTab('singles');
+      setAddMode('single');
+    }
+  }, [isAuthenticated]);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -228,6 +347,7 @@ export default function BeneficiariesPage() {
             provider: String(row.provider || ''),
             accountNumber: String(row.accountNumber || ''),
             branchName: String(row.branchName || '—'),
+            branchId: row.branchId != null ? String(row.branchId) : null,
             createdAt: String(row.createdAt || new Date().toISOString()),
             meterType,
             customerName: row.customerName ? String(row.customerName) : undefined,
@@ -251,9 +371,13 @@ export default function BeneficiariesPage() {
     setGroupMenuOpenId(null);
     setExpandedGroupId(null);
     resetAddForm(service);
-    setAddMode(supportsGroups(service) && phoneSubTab === 'groups' ? 'group' : 'single');
+    setAddMode(
+      !isAuthenticated && supportsGroups(service) && phoneSubTab === 'groups'
+        ? 'group'
+        : 'single',
+    );
     if (service !== 'phone') {
-      setPhoneSubTab('groups');
+      setPhoneSubTab(isAuthenticated ? 'singles' : 'groups');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reset when switching tabs only
   }, [service]);
@@ -263,8 +387,8 @@ export default function BeneficiariesPage() {
     setIsAdding(false);
     setMenuOpenId(null);
     setGroupMenuOpenId(null);
-    setAddMode(phoneSubTab === 'groups' ? 'group' : 'single');
-  }, [phoneSubTab, service]);
+    setAddMode(!isAuthenticated && phoneSubTab === 'groups' ? 'group' : 'single');
+  }, [phoneSubTab, service, isAuthenticated]);
 
   useEffect(() => {
     if (!isAdding) return;
@@ -294,30 +418,49 @@ export default function BeneficiariesPage() {
 
     void (async () => {
       try {
-        const next = await mockLookupMeter(digits, disco, meterType);
-        if (requestId !== verifyRequestRef.current) return;
-        setLookupName(next.customerName);
-        setLookupAddress(next.address);
-        setVerifyError(null);
+        if (isAuthenticated) {
+          const raw = await businessPaymentsApi.verifyMeter({
+            meter: digits,
+            disco: resolveDiscoCode(disco),
+            vendType: meterType.toUpperCase(),
+          });
+          if (requestId !== verifyRequestRef.current) return;
+          const data = parseMeterVerifyCustomerData(raw);
+          const name = meterCustomerName(data);
+          if (!name) {
+            throw new Error('Could not verify meter');
+          }
+          setLookupName(name);
+          setLookupAddress(meterCustomerAddress(data) || '—');
+          setVerifyError(null);
+        } else {
+          const next = await mockLookupMeter(digits, disco, meterType);
+          if (requestId !== verifyRequestRef.current) return;
+          setLookupName(next.customerName);
+          setLookupAddress(next.address);
+          setVerifyError(null);
+        }
       } catch (error) {
         if (requestId !== verifyRequestRef.current) return;
         setLookupName('');
         setLookupAddress('');
-        setVerifyError(error instanceof Error ? error.message : 'Could not verify meter');
+        setVerifyError(
+          paymentErrorMessage(error, error instanceof Error ? error.message : 'Could not verify meter'),
+        );
       } finally {
         if (requestId === verifyRequestRef.current) setLookingUp(false);
       }
     })();
-  }, [disco, isAdding, meterNumber, meterType, service]);
+  }, [disco, isAdding, isAuthenticated, meterNumber, meterType, service]);
 
   function resetAddForm(nextService: BeneficiaryService = service) {
     setTitle('');
-    setDisco(ELECTRICITY_DISCOS[0]?.id ?? 'ABUJA');
+    setDisco(discoOptions.find((item) => item.available)?.code ?? ELECTRICITY_DISCOS[0]?.id ?? 'ABUJA');
     setMeterType('prepaid');
     setMeterNumber('');
-    setNetwork(AIRTIME_NETWORKS[0]?.id ?? 'mtn');
+    setNetwork(networkTileOptions[0]?.id ?? AIRTIME_NETWORKS[0]?.id ?? 'mtn');
     setPhone('');
-    setCableProvider('dstv');
+    setCableProvider((cableTileOptions[0]?.id as CableProviderId) ?? 'dstv');
     setSmartCard('');
     setBranchName(branches[0]?.name ?? '');
     setLookupName('');
@@ -328,28 +471,17 @@ export default function BeneficiariesPage() {
     void nextService;
   }
 
-  async function handleVerifySmartcard() {
-    setLookingUp(true);
-    setVerifyError(null);
-    try {
-      const next = await mockLookupSmartcard(smartCard, cableProvider);
-      setLookupName(next.customerName);
-      setLookupAddress('');
-      toast.success('Smartcard verified');
-    } catch (error) {
-      setLookupName('');
-      setVerifyError(error instanceof Error ? error.message : 'Could not verify smartcard');
-      toast.error(error instanceof Error ? error.message : 'Could not verify smartcard');
-    } finally {
-      setLookingUp(false);
-    }
-  }
-
-  const handleSave = (event: React.FormEvent) => {
+  const handleSave = async (event: React.FormEvent) => {
     event.preventDefault();
-    const branch = branchName || branches[0]?.name || 'Head Office';
+    const selectedBranch =
+      branches.find((branch) => branch.name === branchName) ?? branches[0] ?? null;
+    const branch = selectedBranch?.name || branchName || 'Head Office';
 
     if (supportsGroups(service) && addMode === 'group') {
+      if (isAuthenticated) {
+        toast.error('Bulk groups coming soon');
+        return;
+      }
       if (!title.trim()) {
         toast.error('Enter a group name');
         return;
@@ -395,6 +527,18 @@ export default function BeneficiariesPage() {
       return;
     }
 
+    let payload: {
+      label: string;
+      service: BusinessBeneficiary['service'];
+      provider: string;
+      accountNumber: string;
+      branchId?: string | null;
+      meterType?: 'prepaid' | 'postpaid' | null;
+      customerName?: string | null;
+      address?: string | null;
+      isPrimary?: boolean;
+      verified?: boolean;
+    } | null = null;
     let next: BusinessBeneficiary | null = null;
 
     if (service === 'electricity') {
@@ -407,13 +551,26 @@ export default function BeneficiariesPage() {
         toast.error('Verify the meter before saving');
         return;
       }
-      next = {
-        id: `ben-${Date.now()}`,
+      payload = {
         label: title.trim(),
         service: 'electricity',
         provider: resolveDiscoCode(disco),
         accountNumber: digits,
+        branchId: selectedBranch?.id ?? null,
+        meterType,
+        customerName: lookupName,
+        address: lookupAddress || null,
+        verified: true,
+        isPrimary: serviceItems.length === 0,
+      };
+      next = {
+        id: `ben-${Date.now()}`,
+        label: payload.label,
+        service: 'electricity',
+        provider: payload.provider,
+        accountNumber: digits,
         branchName: branch,
+        branchId: selectedBranch?.id ?? null,
         createdAt: new Date().toISOString(),
         meterType,
         customerName: lookupName,
@@ -426,39 +583,68 @@ export default function BeneficiariesPage() {
         toast.error('Enter a valid Nigerian phone number');
         return;
       }
-      next = {
-        id: `ben-${Date.now()}`,
+      payload = {
         label: title.trim(),
         service: 'phone',
         provider: network,
         accountNumber: normalizePhone(phone),
+        branchId: selectedBranch?.id ?? null,
+        verified: true,
+        isPrimary: serviceItems.length === 0,
+      };
+      next = {
+        id: `ben-${Date.now()}`,
+        label: payload.label,
+        service: 'phone',
+        provider: network,
+        accountNumber: normalizePhone(phone),
         branchName: branch,
+        branchId: selectedBranch?.id ?? null,
         createdAt: new Date().toISOString(),
         verified: true,
         isPrimary: serviceItems.length === 0,
       };
     } else {
       const digits = smartCard.replace(/\D/g, '');
-      if (digits.length < 10) {
-        toast.error('Enter a valid smartcard / IUC number');
+      if (digits.length < 8) {
+        toast.error('Enter a valid smartcard / IUC number (at least 8 digits)');
         return;
       }
-      if (!lookupName || lookingUp) {
-        toast.error('Verify the smartcard before saving');
-        return;
-      }
-      next = {
-        id: `ben-${Date.now()}`,
+      payload = {
         label: title.trim(),
         service: 'cable',
         provider: cableProvider,
         accountNumber: digits,
-        branchName: branch,
-        createdAt: new Date().toISOString(),
-        customerName: lookupName,
-        verified: true,
+        branchId: selectedBranch?.id ?? null,
         isPrimary: serviceItems.length === 0,
       };
+      next = {
+        id: `ben-${Date.now()}`,
+        label: payload.label,
+        service: 'cable',
+        provider: cableProvider,
+        accountNumber: digits,
+        branchName: branch,
+        branchId: selectedBranch?.id ?? null,
+        createdAt: new Date().toISOString(),
+        isPrimary: serviceItems.length === 0,
+      };
+    }
+
+    if (isAuthenticated && payload) {
+      setSaving(true);
+      try {
+        await businessBeneficiariesApi.create(payload);
+        await refreshMe();
+        setIsAdding(false);
+        resetAddForm();
+        toast.success(`${tab.singular[0].toUpperCase()}${tab.singular.slice(1)} saved`);
+      } catch (error) {
+        toast.error(paymentErrorMessage(error, `Could not save ${tab.singular}`));
+      } finally {
+        setSaving(false);
+      }
+      return;
     }
 
     setItems((current) => [...current, next!]);
@@ -467,7 +653,19 @@ export default function BeneficiariesPage() {
     toast.success(`${tab.singular[0].toUpperCase()}${tab.singular.slice(1)} saved (demo)`);
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
+    if (isAuthenticated) {
+      try {
+        await businessBeneficiariesApi.remove(id);
+        await refreshMe();
+        setMenuOpenId(null);
+        toast.success(`${tab.singular[0].toUpperCase()}${tab.singular.slice(1)} removed`);
+      } catch (error) {
+        toast.error(paymentErrorMessage(error, `Could not remove ${tab.singular}`));
+      }
+      return;
+    }
+
     setItems((current) => {
       const target = current.find((item) => item.id === id);
       const remaining = current.filter((item) => item.id !== id);
@@ -484,7 +682,19 @@ export default function BeneficiariesPage() {
     toast.success(`${tab.singular[0].toUpperCase()}${tab.singular.slice(1)} removed (demo)`);
   };
 
-  const handleSetPrimary = (id: string) => {
+  const handleSetPrimary = async (id: string) => {
+    if (isAuthenticated) {
+      try {
+        await businessBeneficiariesApi.update(id, { isPrimary: true });
+        await refreshMe();
+        setMenuOpenId(null);
+        toast.success(`Primary ${tab.singular} updated`);
+      } catch (error) {
+        toast.error(paymentErrorMessage(error, `Could not update primary ${tab.singular}`));
+      }
+      return;
+    }
+
     setItems((current) => {
       const target = current.find((item) => item.id === id);
       if (!target) return current;
@@ -588,7 +798,7 @@ export default function BeneficiariesPage() {
         })}
       </div>
 
-      {service === 'phone' ? (
+      {service === 'phone' && !isAuthenticated ? (
         <div className="flex gap-1 rounded-xl border border-gray-200 bg-gray-50 p-1">
           {(
             [
@@ -789,13 +999,17 @@ export default function BeneficiariesPage() {
         service === 'phone' ? (
           <button
             type="button"
-            onClick={() => startAdding(phoneSubTab === 'groups' ? 'group' : 'single')}
+            onClick={() =>
+              startAdding(
+                !isAuthenticated && phoneSubTab === 'groups' ? 'group' : 'single',
+              )
+            }
             className="flex w-full items-center gap-3 rounded-xl border border-dashed border-blue-200 bg-white px-4 py-4 text-sm font-semibold text-blue-normal hover:border-blue-normal hover:bg-blue-50/40"
           >
             <span className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 text-blue-normal">
               <Plus className="h-4 w-4" />
             </span>
-            {phoneSubTab === 'groups' ? 'Add group' : 'Add single number'}
+            {!isAuthenticated && phoneSubTab === 'groups' ? 'Add group' : 'Add single number'}
           </button>
         ) : (
           <button
@@ -917,7 +1131,7 @@ export default function BeneficiariesPage() {
                   <div>
                     <p className="block text-sm font-medium text-gray-700">Network</p>
                     <ProviderTiles
-                      options={AIRTIME_NETWORKS}
+                      options={networkTileOptions}
                       value={member.provider}
                       onChange={(provider) =>
                         setGroupMembers((current) =>
@@ -1041,7 +1255,7 @@ export default function BeneficiariesPage() {
             <>
               <div>
                 <p className="block text-sm font-medium text-gray-700">Network</p>
-                <ProviderTiles options={AIRTIME_NETWORKS} value={network} onChange={setNetwork} />
+                <ProviderTiles options={networkTileOptions} value={network} onChange={setNetwork} />
               </div>
               <div>
                 <label htmlFor="add-phone" className="block text-sm font-medium text-gray-700">
@@ -1064,51 +1278,24 @@ export default function BeneficiariesPage() {
               <div>
                 <p className="block text-sm font-medium text-gray-700">Provider</p>
                 <ProviderTiles
-                  options={CABLE_PROVIDERS}
+                  options={cableTileOptions}
                   value={cableProvider}
-                  onChange={(id) => {
-                    setCableProvider(id as CableProviderId);
-                    setLookupName('');
-                    setVerifyError(null);
-                  }}
+                  onChange={(id) => setCableProvider(id as CableProviderId)}
                 />
               </div>
               <div>
                 <label htmlFor="add-smartcard" className="block text-sm font-medium text-gray-700">
                   Smartcard / IUC
                 </label>
-                <div className="mt-1.5 flex gap-2">
-                  <input
-                    id="add-smartcard"
-                    inputMode="numeric"
-                    value={smartCard}
-                    onChange={(event) => {
-                      setSmartCard(event.target.value.replace(/[^\d]/g, ''));
-                      setLookupName('');
-                      setVerifyError(null);
-                    }}
-                    placeholder="7012345678"
-                    className={cn(
-                      fieldClass.replace('mt-1.5 ', ''),
-                      lookupName && 'border-green-500 focus:border-green-500 focus:ring-green-500/20',
-                    )}
-                  />
-                  <button
-                    type="button"
-                    onClick={handleVerifySmartcard}
-                    disabled={lookingUp || smartCard.trim().length < 10}
-                    className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-800 hover:bg-gray-50 disabled:opacity-50"
-                  >
-                    {lookingUp ? 'Checking…' : 'Verify'}
-                  </button>
-                </div>
-                {verifyError ? <p className="mt-2 text-xs text-red-600">{verifyError}</p> : null}
+                <input
+                  id="add-smartcard"
+                  inputMode="numeric"
+                  value={smartCard}
+                  onChange={(event) => setSmartCard(event.target.value.replace(/[^\d]/g, ''))}
+                  placeholder="7012345678"
+                  className={fieldClass}
+                />
               </div>
-              {lookupName ? (
-                <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-gray-800">
-                  <p className="font-semibold">{lookupName}</p>
-                </div>
-              ) : null}
             </>
           ) : null}
 
@@ -1137,13 +1324,17 @@ export default function BeneficiariesPage() {
           <button
             type="submit"
             disabled={
+              saving ||
               lookingUp ||
-              (addMode === 'single' && service === 'electricity' && !lookupName) ||
-              (addMode === 'single' && service === 'cable' && !lookupName)
+              (addMode === 'single' && service === 'electricity' && !lookupName)
             }
             className={primaryButtonClass}
           >
-            {supportsGroups(service) && addMode === 'group' ? 'Save group' : `Save ${tab.singular}`}
+            {saving
+              ? 'Saving…'
+              : supportsGroups(service) && addMode === 'group'
+                ? 'Save group'
+                : `Save ${tab.singular}`}
           </button>
         </form>
       ) : null}

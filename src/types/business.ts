@@ -110,6 +110,7 @@ export type BusinessBeneficiary = {
   provider: string;
   accountNumber: string;
   branchName: string;
+  branchId?: string | null;
   createdAt: string;
   meterType?: 'prepaid' | 'postpaid';
   customerName?: string;
@@ -163,7 +164,7 @@ export type BusinessTransactionPreview = {
 export type BranchSpendPeriod = 'today' | '7d' | '30d' | 'all';
 
 export type BranchSpendItem = {
-  branchId: string;
+  branchId: string | null;
   branchName: string;
   amount: number;
 };
@@ -183,4 +184,24 @@ export type BusinessAnalyticsData = {
   averageTransactionAmount: number;
   branchSpend: BranchSpendItem[];
   serviceBreakdown: { service: string; amount: number; count: number }[];
+};
+
+export type BusinessSchedule = {
+  id: string;
+  serviceType: 'airtime' | 'data' | 'electricity' | 'cable' | 'other';
+  serviceProvider: string;
+  recipient: string;
+  amount: number;
+  frequency: 'daily' | 'weekly' | 'monthly' | 'custom';
+  status: 'active' | 'paused' | 'completed' | 'failed' | 'cancelled';
+  nextRunAt: string;
+  lastRunAt: string | null;
+  planId: string | null;
+  planName: string | null;
+  vendType: string | null;
+  phone: string | null;
+  branchId: string | null;
+  branchName: string | null;
+  walletId: string;
+  createdAt: string | null;
 };

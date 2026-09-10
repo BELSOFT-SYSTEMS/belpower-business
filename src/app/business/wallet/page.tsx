@@ -21,28 +21,65 @@ import type { BranchWalletOverview, BusinessTransactionPreview } from '@/types/b
 import { formatPrice } from '@/utils/formatPrice';
 import { formatBusinessBranchLabel } from '@/utils/businessBranchLabel';
 
-type LiveScope = BranchWalletOverview & { isFrozen?: boolean };
+type LiveScope = BranchWalletOverview & { isFrozen?: boolean; walletId?: string };
 
 const COMPANY_SCOPE_ID = HEAD_OFFICE_BRANCH_ID;
 
 export default function WalletPage() {
-  const { user, demoRole, canAccess, isAuthenticated, dashboardBootstrap } = useBusinessAuth();
+  const { user, demoRole, canAccess, isAuthenticated, dashboardBootstrap, refreshMe } =
+    useBusinessAuth();
   const role = user?.role ?? demoRole;
   const mockDashboard = getMockDashboardForRole(role);
   const mockScopeOptions = useMemo(() => getWalletScopeOptionsForRole(role), [role]);
   const mockTransactions = getMockTransactionsForRole(role);
   const canViewCompanyWallet = canViewAllBranchWalletInfo(role);
+  const canFreeze = canAccess('wallet.freeze');
   const previousRoleRef = useRef(role);
 
   const [liveScopes, setLiveScopes] = useState<LiveScope[] | null>(null);
   const [totalAllocatedLive, setTotalAllocatedLive] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [freezeBusy, setFreezeBusy] = useState(false);
 
   const [selectedScopeId, setSelectedScopeId] = useState(() =>
     canViewAllBranchWalletInfo(role)
       ? COMPANY_SCOPE_ID
       : (user?.branchId ?? mockScopeOptions[0]?.branchId ?? ''),
   );
+
+  const loadOverview = async () => {
+    const overview = await businessWalletApi.overview();
+    const scopes: LiveScope[] = [];
+    if (overview.companyWallet && canViewCompanyWallet) {
+      scopes.push({
+        branchId: COMPANY_SCOPE_ID,
+        branchName: 'Head Office',
+        allocatedBalance: overview.companyWallet.availableBalance,
+        todaySpend: overview.companyWallet.todaySpend ?? 0,
+        monthSpend: overview.companyWallet.monthSpend ?? 0,
+        monthTransactions: overview.companyWallet.monthTransactions ?? 0,
+        walletId: overview.companyWallet.id,
+        isFrozen: Boolean(overview.wallets.find((w) => w.scope === 'company')?.isFrozen),
+      });
+    }
+
+    for (const wallet of overview.wallets.filter((w) => w.scope === 'branch')) {
+      if (!wallet.branchId) continue;
+      scopes.push({
+        branchId: wallet.branchId,
+        branchName: wallet.branchName || 'Branch',
+        allocatedBalance: wallet.availableBalance,
+        todaySpend: wallet.todaySpend ?? 0,
+        monthSpend: wallet.monthSpend ?? 0,
+        monthTransactions: wallet.monthTransactions ?? 0,
+        walletId: wallet.id,
+        isFrozen: Boolean(wallet.isFrozen),
+      });
+    }
+
+    setLiveScopes(scopes);
+    setTotalAllocatedLive(overview.totalAllocated);
+  };
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -54,39 +91,7 @@ export default function WalletPage() {
     setLoading(true);
     void (async () => {
       try {
-        const overview = await businessWalletApi.overview();
-        if (cancelled) return;
-
-        const scopes: LiveScope[] = [];
-        if (overview.companyWallet && canViewCompanyWallet) {
-          scopes.push({
-            branchId: COMPANY_SCOPE_ID,
-            branchName: 'Head Office',
-            allocatedBalance: overview.companyWallet.availableBalance,
-            todaySpend: overview.companyWallet.todaySpend ?? 0,
-            monthSpend: overview.companyWallet.monthSpend ?? 0,
-            monthTransactions: overview.companyWallet.monthTransactions ?? 0,
-            isFrozen: Boolean(
-              overview.wallets.find((w) => w.scope === 'company')?.isFrozen,
-            ),
-          });
-        }
-
-        for (const wallet of overview.wallets.filter((w) => w.scope === 'branch')) {
-          if (!wallet.branchId) continue;
-          scopes.push({
-            branchId: wallet.branchId,
-            branchName: wallet.branchName || 'Branch',
-            allocatedBalance: wallet.availableBalance,
-            todaySpend: wallet.todaySpend ?? 0,
-            monthSpend: wallet.monthSpend ?? 0,
-            monthTransactions: wallet.monthTransactions ?? 0,
-            isFrozen: Boolean(wallet.isFrozen),
-          });
-        }
-
-        setLiveScopes(scopes);
-        setTotalAllocatedLive(overview.totalAllocated);
+        await loadOverview();
       } catch (error) {
         if (!cancelled) {
           toast.error(
@@ -101,6 +106,7 @@ export default function WalletPage() {
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reload on auth/role scope only
   }, [canViewCompanyWallet, isAuthenticated]);
 
   const scopeOptions = isAuthenticated ? liveScopes ?? [] : mockScopeOptions;
@@ -230,6 +236,45 @@ export default function WalletPage() {
           {isFrozen && (
             <p className="mt-2 text-sm font-medium text-red-normal">Wallet is frozen</p>
           )}
+          {canFreeze && viewingHeadOffice && (selectedScope as LiveScope | undefined)?.walletId ? (
+            <button
+              type="button"
+              disabled={freezeBusy}
+              onClick={() => {
+                const walletId = (selectedScope as LiveScope).walletId;
+                if (!walletId) return;
+                setFreezeBusy(true);
+                void (async () => {
+                  try {
+                    if (isFrozen) {
+                      await businessWalletApi.unfreeze(walletId);
+                      toast.success('Company wallet unfrozen');
+                    } else {
+                      await businessWalletApi.freeze(walletId);
+                      toast.success('Company wallet frozen');
+                    }
+                    await loadOverview();
+                    try {
+                      await refreshMe();
+                    } catch {
+                      // ignore
+                    }
+                  } catch (error) {
+                    toast.error(
+                      error instanceof BusinessApiError
+                        ? error.message
+                        : 'Could not update wallet freeze status',
+                    );
+                  } finally {
+                    setFreezeBusy(false);
+                  }
+                })();
+              }}
+              className="mt-3 inline-flex rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+            >
+              {freezeBusy ? 'Updating…' : isFrozen ? 'Unfreeze wallet' : 'Freeze wallet'}
+            </button>
+          ) : null}
         </div>
         <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
           <p className="text-sm text-gray-500">Today&apos;s spend</p>

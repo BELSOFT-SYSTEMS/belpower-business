@@ -202,3 +202,56 @@ export function normalizeElectricityDiscoMap(
     })
     .sort((a, b) => a.name.localeCompare(b.name));
 }
+
+export type CatalogProviderOption = {
+  id: string;
+  name: string;
+  logo: string;
+  available: boolean;
+};
+
+/** Map BuyPower network status `{ MTN: true }` onto local catalog tiles. */
+export function mapNetworkProviderOptions(
+  statusMap: Record<string, boolean>,
+  catalog: Array<{ id: string; name: string; logo: string }>,
+): CatalogProviderOption[] {
+  if (!statusMap || Object.keys(statusMap).length === 0) {
+    return catalog.map((item) => ({ ...item, available: true }));
+  }
+
+  const byCode = new Map(
+    Object.entries(statusMap).map(([code, available]) => [
+      code.toLowerCase() === 'etisalat' ? '9mobile' : code.toLowerCase(),
+      Boolean(available),
+    ]),
+  );
+
+  return catalog
+    .map((item) => ({
+      ...item,
+      available: byCode.has(item.id) ? Boolean(byCode.get(item.id)) : true,
+    }))
+    .filter((item) => byCode.size === 0 || byCode.has(item.id));
+}
+
+/** Map BuyPower cable status `{ DSTV: true }` onto local catalog tiles (excludes showmax). */
+export function mapCableProviderOptions(
+  statusMap: Record<string, boolean>,
+  catalog: Array<{ id: string; name: string; logo: string }>,
+): CatalogProviderOption[] {
+  const base = catalog.filter((item) => item.id !== 'showmax');
+  if (!statusMap || Object.keys(statusMap).length === 0) {
+    return base.map((item) => ({ ...item, available: true }));
+  }
+
+  const byCode = new Map(
+    Object.entries(statusMap).map(([code, available]) => [code.toLowerCase(), Boolean(available)]),
+  );
+
+  return base
+    .map((item) => ({
+      ...item,
+      available: byCode.has(item.id) ? Boolean(byCode.get(item.id)) : true,
+    }))
+    .filter((item) => byCode.size === 0 || byCode.has(item.id));
+}
