@@ -100,6 +100,8 @@ export type BusinessTeamMember = {
   branchName: string | null;
   status: 'active' | 'invited' | 'suspended';
   lastActiveAt: string | null;
+  /** Present only while status is `invited` (pending accept). */
+  inviteUrl?: string | null;
 };
 
 export type BusinessBeneficiary = {

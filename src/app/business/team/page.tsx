@@ -164,14 +164,11 @@ export default function TeamPage() {
       });
       setInviteOpen(false);
       resetInviteForm();
-      toast.success(`Invitation sent to ${email}`);
-      // Only surface the raw link if Resend failed — otherwise email is enough.
-      if (result.emailSent === false && result.inviteUrl) {
-        toast.message('Email could not be sent. Copy this invite link:', {
-          description: result.inviteUrl,
-          duration: 20000,
-        });
-      }
+      toast.success(
+        result.emailSent === false
+          ? `Invite created for ${email}. Use Copy invite link from the team list.`
+          : `Invitation sent to ${email}`,
+      );
       await load();
     } catch (error) {
       toast.error(error instanceof BusinessApiError ? error.message : 'Invite failed');
@@ -293,6 +290,11 @@ export default function TeamPage() {
                     member.id !== user?.id &&
                     member.role !== 'super_admin' &&
                     member.status !== 'invited';
+                  const canCopyInvite =
+                    canManageTeam &&
+                    member.status === 'invited' &&
+                    Boolean(member.inviteUrl);
+                  const showActions = canDelete || canSuspend || canCopyInvite;
                   return (
                     <tr key={member.id} className="hover:bg-gray-50/80">
                       <td className="whitespace-nowrap px-4 py-3 font-medium text-gray-900">
@@ -318,7 +320,7 @@ export default function TeamPage() {
                       </td>
                       {canManageTeam ? (
                         <td className="whitespace-nowrap px-4 py-3 text-right">
-                          {canDelete || canSuspend ? (
+                          {showActions ? (
                             <div className="relative inline-flex justify-end">
                               <button
                                 type="button"
@@ -346,12 +348,30 @@ export default function TeamPage() {
                               {menuOpenId === member.id && menuPosition ? (
                                 <div
                                   data-team-actions-menu
-                                  className="fixed z-50 w-44 rounded-xl border border-gray-200 bg-white py-1 shadow-lg"
+                                  className="fixed z-50 w-48 rounded-xl border border-gray-200 bg-white py-1 shadow-lg"
                                   style={{
                                     top: menuPosition.top,
                                     right: menuPosition.right,
                                   }}
                                 >
+                                  {canCopyInvite ? (
+                                    <button
+                                      type="button"
+                                      onClick={async () => {
+                                        setMenuOpenId(null);
+                                        setMenuPosition(null);
+                                        try {
+                                          await navigator.clipboard.writeText(member.inviteUrl!);
+                                          toast.success('Invite link copied');
+                                        } catch {
+                                          toast.error('Could not copy invite link');
+                                        }
+                                      }}
+                                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                                    >
+                                      Copy invite link
+                                    </button>
+                                  ) : null}
                                   {canSuspend ? (
                                     <button
                                       type="button"
