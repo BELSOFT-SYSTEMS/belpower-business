@@ -16,7 +16,7 @@ import {
   networkToDisco,
   normalizeBusinessPhone,
   paymentErrorMessage,
-  type BusinessDataPlan,
+  type NormalizedUtilityPlan,
 } from '@/lib/businessPaymentsApi';
 import { formatPrice } from '@/utils/formatPrice';
 import { cn } from '@/lib/utils';
@@ -37,28 +37,6 @@ import {
 
 type View = 'form' | 'success' | 'failed' | 'pending';
 
-type NormalizedDataPlan = {
-  key: string;
-  name: string;
-  validity: string;
-  amount: number;
-  tariffClass: string;
-};
-
-function normalizeDataPlan(plan: BusinessDataPlan): NormalizedDataPlan | null {
-  const tariffClass = String(plan.tariffClass || plan.code || plan.id || '').trim();
-  if (!tariffClass) return null;
-  const amount = Number(plan.amount ?? plan.price ?? 0);
-  if (!amount || amount <= 0) return null;
-  return {
-    key: tariffClass,
-    name: String(plan.name || plan.description || tariffClass),
-    validity: String(plan.validity || ''),
-    amount,
-    tariffClass,
-  };
-}
-
 export function DataPaymentFlow() {
   const params = useSearchParams();
   const session = usePaymentSession();
@@ -67,12 +45,12 @@ export function DataPaymentFlow() {
   const [network, setNetwork] = useState(initialNetwork);
   const [phone, setPhone] = useState(params.get('phoneNumber') ?? '');
   const [planKey, setPlanKey] = useState(params.get('dataPlan') ?? '');
-  const [plans, setPlans] = useState<NormalizedDataPlan[]>([]);
+  const [plans, setPlans] = useState<NormalizedUtilityPlan[]>([]);
   const [plansLoading, setPlansLoading] = useState(false);
   const [pending, setPending] = useState(false);
   const [result, setResult] = useState<{ reference: string; status: string } | null>(null);
 
-  const selectedPlan = plans.find((plan) => plan.key === planKey) ?? null;
+  const selectedPlan = plans.find((plan) => plan.code === planKey) ?? null;
   const amount = selectedPlan?.amount ?? 0;
   const phoneOk = isValidNigerianPhone(phone);
   const {
@@ -92,17 +70,19 @@ export function DataPaymentFlow() {
 
     (async () => {
       try {
-        const raw = await businessPaymentsApi.dataPlans(network);
+        const next = await businessPaymentsApi.dataPlans(network);
         if (cancelled) return;
-        const next = raw
-          .map(normalizeDataPlan)
-          .filter((plan): plan is NormalizedDataPlan => Boolean(plan));
         setPlans(next);
         const match =
           (preferredPlan &&
-            next.find((plan) => plan.key === preferredPlan || plan.name === preferredPlan)) ||
+            next.find(
+              (plan) =>
+                plan.code === preferredPlan ||
+                plan.tariffClass === preferredPlan ||
+                plan.name === preferredPlan,
+            )) ||
           next[0];
-        setPlanKey(match?.key ?? '');
+        setPlanKey(match?.code ?? '');
       } catch (error) {
         if (cancelled) return;
         setPlans([]);
@@ -283,12 +263,12 @@ export function DataPaymentFlow() {
                 <>
                   <div className="mt-1.5 grid gap-2 sm:grid-cols-2">
                     {visiblePlans.map((plan) => {
-                      const selected = plan.key === selectedPlan?.key;
+                      const selected = plan.code === selectedPlan?.code;
                       return (
                         <button
-                          key={plan.key}
+                          key={plan.code}
                           type="button"
-                          onClick={() => setPlanKey(plan.key)}
+                          onClick={() => setPlanKey(plan.code)}
                           className={cn(
                             'rounded-xl border px-4 py-3 text-left',
                             selected

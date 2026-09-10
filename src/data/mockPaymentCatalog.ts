@@ -1,3 +1,5 @@
+import { getDiscoDisplayName } from '@/constants/discoNames';
+
 export type AirtimeNetworkId = 'mtn' | 'airtel' | 'glo' | '9mobile';
 export type CableProviderId = 'dstv' | 'gotv' | 'startimes' | 'showmax';
 export type PaymentService = 'airtime' | 'data' | 'electricity' | 'cable';
@@ -231,6 +233,7 @@ export function findCablePackage(idOrName: string, provider?: string): CablePack
 
 export function resolveDiscoCode(code: string): string {
   const key = code.trim().toUpperCase().replace(/\s/g, '_');
+  if (!key) return 'ABUJA';
   const aliases: Record<string, string> = {
     IKEDC: 'IKEJA',
     EKEDC: 'EKO',
@@ -245,13 +248,18 @@ export function resolveDiscoCode(code: string): string {
     YEDC: 'YOLA',
     EEDC: 'ENUGU',
   };
-  const resolved = aliases[key] ?? key;
-  return ELECTRICITY_DISCOS.some((item) => item.id === resolved) ? resolved : 'ABUJA';
+  // Preserve live BuyPower disco codes (APLE, BH, …); only map known aliases.
+  return aliases[key] ?? key;
 }
 
 export function getProviderName(service: PaymentService, providerId: string): string {
   if (service === 'electricity') {
-    return ELECTRICITY_DISCOS.find((item) => item.id === providerId)?.name ?? providerId;
+    const upper = providerId.trim().toUpperCase();
+    return (
+      ELECTRICITY_DISCOS.find((item) => item.id === upper)?.name ??
+      getDiscoDisplayName(upper) ??
+      providerId
+    );
   }
   if (service === 'cable') {
     return CABLE_PROVIDERS.find((item) => item.id === providerId)?.name ?? providerId;

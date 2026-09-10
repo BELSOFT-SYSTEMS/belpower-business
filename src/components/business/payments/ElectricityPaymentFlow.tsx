@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { PageHeader } from '@/components/business/PageHeader';
 import { ElectricityDiscoSelector } from '@/components/business/payments/ElectricityDiscoSelector';
 import { useBusinessAuth } from '@/context/BusinessAuthContext';
+import { DISCO_NAMES } from '@/constants/discoNames';
 import {
   ELECTRICITY_DISCOS,
   ELECTRICITY_MAX,
@@ -22,6 +23,13 @@ import {
   normalizeBusinessPhone,
   paymentErrorMessage,
 } from '@/lib/businessPaymentsApi';
+import {
+  meterCustomerAddress,
+  meterCustomerName,
+  meterOutstanding,
+  normalizeElectricityDiscoMap,
+  parseMeterVerifyCustomerData,
+} from '@/utils/businessPaymentCatalog';
 import { formatPrice } from '@/utils/formatPrice';
 import { cn } from '@/lib/utils';
 import {
@@ -38,53 +46,44 @@ import {
 
 type View = 'form' | 'success' | 'failed' | 'pending';
 
+type DiscoOption = { code: string; name: string; available: boolean };
+
 const METER_VERIFY_DEBOUNCE_MS = 600;
 const METER_VERIFY_MIN_DIGITS = 10;
 
-function pickString(...values: unknown[]): string {
-  for (const value of values) {
-    if (typeof value === 'string' && value.trim()) return value.trim();
-    if (typeof value === 'number' && Number.isFinite(value)) return String(value);
-  }
-  return '';
-}
+const FALLBACK_DISCO_OPTIONS: DiscoOption[] = ELECTRICITY_DISCOS.map((item) => ({
+  code: item.id,
+  name: item.name,
+  available: true,
+}));
 
-function pickOutstanding(raw: Record<string, unknown>): number | null {
-  const candidates = [
-    raw.outstandingDebt,
-    raw.outstanding,
-    raw.Outstanding,
-    raw.debt,
-    raw.amountDue,
-  ];
-  for (const value of candidates) {
-    const n = typeof value === 'number' ? value : Number(String(value ?? '').replace(/,/g, ''));
-    if (Number.isFinite(n) && n > 0) return n;
-  }
-  return null;
-}
-
-function mapMeterLookup(
-  raw: Record<string, unknown>,
-  disco: string,
-  meterType: MeterType,
-): MeterLookup {
-  const customerName =
-    pickString(
-      raw.name,
-      raw.customer_name,
-      raw.customerName,
-      raw.CustomerName,
-      raw.customer,
-    ) || 'Customer';
-  const address =
-    pickString(raw.address, raw.CustomerAddress, raw.customerAddress, raw.Address) || '—';
+function mapMeterLookup(raw: unknown, disco: string, meterType: MeterType): MeterLookup {
+  const data = parseMeterVerifyCustomerData(raw);
   return {
-    customerName,
-    address,
+    customerName: meterCustomerName(data) || 'Customer',
+    address: meterCustomerAddress(data) || '—',
     disco,
     meterType,
-    outstanding: pickOutstanding(raw),
+    outstanding: meterOutstanding(data),
+  };
+}
+
+function readVendLimits(raw: unknown): { minVend: number | null; maxVend: number | null } {
+  const data = parseMeterVerifyCustomerData(raw);
+  if (!data) return { minVend: null, maxVend: null };
+
+  const min =
+    typeof data.min_vend_amount === 'number' && Number.isFinite(data.min_vend_amount)
+      ? data.min_vend_amount
+      : null;
+  const max =
+    typeof data.max_vend_amount === 'number' && Number.isFinite(data.max_vend_amount)
+      ? data.max_vend_amount
+      : null;
+
+  return {
+    minVend: min != null && min > 0 ? min : null,
+    maxVend: max != null && max > 0 ? max : null,
   };
 }
 
@@ -96,11 +95,14 @@ export function ElectricityPaymentFlow() {
   const defaultPhone = business?.phone ? normalizeBusinessPhone(business.phone) : '';
   const [view, setView] = useState<View>('form');
   const [disco, setDisco] = useState(resolveDiscoCode(params.get('disco') || 'ABUJA'));
+  const [discoOptions, setDiscoOptions] = useState<DiscoOption[]>(FALLBACK_DISCO_OPTIONS);
   const [meterType, setMeterType] = useState<MeterType>(initialType);
   const [meterNumber, setMeterNumber] = useState(params.get('meterNumber') ?? '');
   const [phone, setPhone] = useState(defaultPhone);
   const [amountInput, setAmountInput] = useState(params.get('amount') ?? '');
   const [lookup, setLookup] = useState<MeterLookup | null>(null);
+  const [minVend, setMinVend] = useState<number | null>(null);
+  const [maxVend, setMaxVend] = useState<number | null>(null);
   const [lookingUp, setLookingUp] = useState(false);
   const [verifyError, setVerifyError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -117,6 +119,39 @@ export function ElectricityPaymentFlow() {
     }
   }, [business?.phone, phone]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const providers = await businessPaymentsApi.electricityProviders();
+        if (cancelled) return;
+        const next = normalizeElectricityDiscoMap(providers, DISCO_NAMES);
+        if (next.length > 0) {
+          setDiscoOptions(next);
+          setDisco((current) => {
+            const resolved = resolveDiscoCode(current);
+            const match = next.find((item) => item.code === resolved && item.available);
+            if (match) return match.code;
+            const firstAvailable = next.find((item) => item.available);
+            return firstAvailable?.code ?? resolved;
+          });
+        } else {
+          setDiscoOptions(FALLBACK_DISCO_OPTIONS);
+        }
+      } catch {
+        if (!cancelled) setDiscoOptions(FALLBACK_DISCO_OPTIONS);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const amountMin = minVend ?? ELECTRICITY_MIN;
+  const amountMax = maxVend ?? ELECTRICITY_MAX;
+
   const amount = useMemo(() => {
     if (meterType === 'postpaid' && lookup?.outstanding) return lookup.outstanding;
     return Number(amountInput.replace(/,/g, '').trim()) || 0;
@@ -132,19 +167,11 @@ export function ElectricityPaymentFlow() {
     dailyLimit: session.dailyLimit,
   });
 
-  const discoOptions = useMemo(
-    () =>
-      ELECTRICITY_DISCOS.map((item) => ({
-        code: item.id,
-        name: item.name,
-        available: true,
-      })),
-    [],
-  );
-
   function clearLookup() {
     setLookup(null);
     setVerifyError(null);
+    setMinVend(null);
+    setMaxVend(null);
     setResult(null);
   }
 
@@ -159,17 +186,22 @@ export function ElectricityPaymentFlow() {
     setLookingUp(true);
     setVerifyError(null);
     setLookup(null);
+    setMinVend(null);
+    setMaxVend(null);
 
     const timer = window.setTimeout(async () => {
       try {
         const raw = await businessPaymentsApi.verifyMeter({
           meter: digits,
-          disco,
+          disco: disco.toUpperCase(),
           vendType: meterType.toUpperCase(),
         });
         if (requestId !== verifyRequestRef.current) return;
-        const next = mapMeterLookup(raw, disco, meterType);
+        const next = mapMeterLookup(raw, disco.toUpperCase(), meterType);
+        const limits = readVendLimits(raw);
         setLookup(next);
+        setMinVend(limits.minVend);
+        setMaxVend(limits.maxVend);
         setVerifyError(null);
         if (next.meterType === 'postpaid' && next.outstanding) {
           setAmountInput(String(next.outstanding));
@@ -177,6 +209,8 @@ export function ElectricityPaymentFlow() {
       } catch (error) {
         if (requestId !== verifyRequestRef.current) return;
         setLookup(null);
+        setMinVend(null);
+        setMaxVend(null);
         setVerifyError(paymentErrorMessage(error, 'Could not verify meter'));
       } finally {
         if (requestId === verifyRequestRef.current) {
@@ -195,6 +229,8 @@ export function ElectricityPaymentFlow() {
     setMeterNumber('');
     setAmountInput('');
     setLookup(null);
+    setMinVend(null);
+    setMaxVend(null);
     setVerifyError(null);
     setResult(null);
   };
@@ -209,8 +245,8 @@ export function ElectricityPaymentFlow() {
       toast.error('Enter a valid Nigerian phone number for the receipt');
       return;
     }
-    if (amount < ELECTRICITY_MIN || amount > ELECTRICITY_MAX) {
-      toast.error(`Amount must be between ${formatPrice(ELECTRICITY_MIN)} and ${formatPrice(ELECTRICITY_MAX)}`);
+    if (amount < amountMin || amount > amountMax) {
+      toast.error(`Amount must be between ${formatPrice(amountMin)} and ${formatPrice(amountMax)}`);
       return;
     }
     if (blockReason) {
@@ -222,7 +258,7 @@ export function ElectricityPaymentFlow() {
     try {
       const data = await businessPaymentsApi.buyElectricity({
         meter: meterNumber.replace(/\D/g, ''),
-        disco,
+        disco: disco.toUpperCase(),
         vendType: meterType === 'postpaid' ? 'POSTPAID' : 'PREPAID',
         amount,
         phone: normalizeBusinessPhone(phone),
@@ -333,7 +369,7 @@ export function ElectricityPaymentFlow() {
               discos={discoOptions}
               selectedCode={disco}
               onSelect={(code) => {
-                setDisco(code);
+                setDisco(code.toUpperCase());
                 clearLookup();
               }}
             />
@@ -436,7 +472,7 @@ export function ElectricityPaymentFlow() {
                 className={fieldClass}
               />
               <p className="mt-2 text-xs text-gray-500">
-                Minimum {formatPrice(ELECTRICITY_MIN)} · Maximum {formatPrice(ELECTRICITY_MAX)}
+                Minimum {formatPrice(amountMin)} · Maximum {formatPrice(amountMax)}
               </p>
             </div>
 
@@ -456,8 +492,8 @@ export function ElectricityPaymentFlow() {
                 !lookup ||
                 lookingUp ||
                 !phoneOk ||
-                amount < ELECTRICITY_MIN ||
-                amount > ELECTRICITY_MAX ||
+                amount < amountMin ||
+                amount > amountMax ||
                 Boolean(blockReason)
               }
               label={`Pay ${amount ? formatPrice(amount) : 'electricity'}`}

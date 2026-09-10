@@ -18,8 +18,13 @@ import {
   cableToDisco,
   normalizeBusinessPhone,
   paymentErrorMessage,
-  type BusinessCablePlan,
+  type NormalizedUtilityPlan,
 } from '@/lib/businessPaymentsApi';
+import {
+  meterCustomerName,
+  parseMeterVerifyCustomerData,
+  smartcardCurrentPackage,
+} from '@/utils/businessPaymentCatalog';
 import { formatPrice } from '@/utils/formatPrice';
 import { cn } from '@/lib/utils';
 import {
@@ -39,45 +44,15 @@ import {
 
 type View = 'form' | 'success' | 'failed' | 'pending';
 
-type NormalizedCablePlan = {
-  key: string;
-  name: string;
-  amount: number;
-  tariffClass: string;
-};
-
 const CABLE_PROVIDER_OPTIONS = CABLE_PROVIDERS.filter((item) => item.id !== 'showmax');
 
-function normalizeCablePlan(plan: BusinessCablePlan): NormalizedCablePlan | null {
-  const tariffClass = String(plan.tariffClass || plan.code || plan.id || '').trim();
-  if (!tariffClass) return null;
-  const amount = Number(plan.amount ?? plan.price ?? 0);
-  if (!amount || amount <= 0) return null;
+function mapSmartcardLookup(raw: unknown, provider: CableProviderId): SmartcardLookup {
+  const data = parseMeterVerifyCustomerData(raw);
   return {
-    key: tariffClass,
-    name: String(plan.name || plan.description || tariffClass),
-    amount,
-    tariffClass,
+    customerName: meterCustomerName(data) || 'Customer',
+    provider,
+    currentPackage: smartcardCurrentPackage(data),
   };
-}
-
-function mapSmartcardLookup(
-  raw: Record<string, unknown>,
-  provider: CableProviderId,
-): SmartcardLookup {
-  const customerName =
-    (typeof raw.name === 'string' && raw.name.trim()) ||
-    (typeof raw.customer_name === 'string' && raw.customer_name.trim()) ||
-    (typeof raw.customerName === 'string' && raw.customerName.trim()) ||
-    (typeof raw.CustomerName === 'string' && raw.CustomerName.trim()) ||
-    'Customer';
-  const currentPackage =
-    (typeof raw.currentPackage === 'string' && raw.currentPackage) ||
-    (typeof raw.current_bouquet === 'string' && raw.current_bouquet) ||
-    (typeof raw.bouquet === 'string' && raw.bouquet) ||
-    (typeof raw.package === 'string' && raw.package) ||
-    null;
-  return { customerName, provider, currentPackage };
 }
 
 export function CablePaymentFlow() {
@@ -94,7 +69,7 @@ export function CablePaymentFlow() {
   const [smartCard, setSmartCard] = useState(params.get('smartCardNumber') ?? '');
   const [phone, setPhone] = useState(defaultPhone);
   const [packageKey, setPackageKey] = useState(params.get('package') ?? '');
-  const [packages, setPackages] = useState<NormalizedCablePlan[]>([]);
+  const [packages, setPackages] = useState<NormalizedUtilityPlan[]>([]);
   const [packagesLoading, setPackagesLoading] = useState(false);
   const [lookup, setLookup] = useState<SmartcardLookup | null>(null);
   const [lookingUp, setLookingUp] = useState(false);
@@ -107,7 +82,7 @@ export function CablePaymentFlow() {
     }
   }, [business?.phone, phone]);
 
-  const selectedPackage = packages.find((item) => item.key === packageKey) ?? null;
+  const selectedPackage = packages.find((item) => item.code === packageKey) ?? null;
   const amount = selectedPackage?.amount ?? 0;
   const phoneOk = isValidNigerianPhone(phone);
   const {
@@ -127,21 +102,19 @@ export function CablePaymentFlow() {
 
     (async () => {
       try {
-        const raw = await businessPaymentsApi.cablePlans(provider);
+        const next = await businessPaymentsApi.cablePlans(provider);
         if (cancelled) return;
-        const next = raw
-          .map(normalizeCablePlan)
-          .filter((plan): plan is NormalizedCablePlan => Boolean(plan));
         setPackages(next);
         const match =
           (preferredPackage &&
             next.find(
               (plan) =>
-                plan.key === preferredPackage ||
+                plan.code === preferredPackage ||
+                plan.tariffClass === preferredPackage ||
                 plan.name.toLowerCase() === preferredPackage.toLowerCase(),
             )) ||
           next[0];
-        setPackageKey(match?.key ?? '');
+        setPackageKey(match?.code ?? '');
       } catch (error) {
         if (cancelled) return;
         setPackages([]);
@@ -190,9 +163,9 @@ export function CablePaymentFlow() {
         const match = packages.find(
           (item) =>
             item.name.toLowerCase() === next.currentPackage!.toLowerCase() ||
-            item.key.toLowerCase() === next.currentPackage!.toLowerCase(),
+            item.code.toLowerCase() === next.currentPackage!.toLowerCase(),
         );
-        if (match) setPackageKey(match.key);
+        if (match) setPackageKey(match.code);
       }
       toast.success('Smartcard verified');
     } catch (error) {
@@ -391,12 +364,12 @@ export function CablePaymentFlow() {
                 <>
                   <div className="mt-1.5 grid gap-2 sm:grid-cols-2">
                     {visiblePackages.map((item) => {
-                      const selected = item.key === selectedPackage?.key;
+                      const selected = item.code === selectedPackage?.code;
                       return (
                         <button
-                          key={item.key}
+                          key={item.code}
                           type="button"
-                          onClick={() => setPackageKey(item.key)}
+                          onClick={() => setPackageKey(item.code)}
                           className={cn(
                             'rounded-xl border px-4 py-3 text-left',
                             selected

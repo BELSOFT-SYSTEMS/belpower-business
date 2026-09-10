@@ -1,4 +1,10 @@
 import { BusinessApiError, businessApiRequest } from '@/lib/businessApi';
+import {
+  extractBuyPowerPlanRows,
+  normalizeBuyPowerPlan,
+  type BuyPowerPlanRow,
+  type NormalizedUtilityPlan,
+} from '@/utils/businessPaymentCatalog';
 
 export type BusinessPurchaseResult = {
   status: 'completed' | 'pending';
@@ -16,39 +22,10 @@ export type BusinessPurchaseResult = {
   settlement_status?: string;
 };
 
-export type BusinessDataPlan = {
-  id?: string;
-  code?: string;
-  tariffClass?: string;
-  name?: string;
-  description?: string;
-  amount?: number;
-  price?: number;
-  validity?: string;
-  [key: string]: unknown;
-};
-
-export type BusinessCablePlan = {
-  id?: string;
-  code?: string;
-  tariffClass?: string;
-  name?: string;
-  description?: string;
-  amount?: number;
-  price?: number;
-  [key: string]: unknown;
-};
-
-function asPlanList(payload: unknown): BusinessDataPlan[] {
-  if (Array.isArray(payload)) return payload as BusinessDataPlan[];
-  if (payload && typeof payload === 'object') {
-    const record = payload as Record<string, unknown>;
-    if (Array.isArray(record.plans)) return record.plans as BusinessDataPlan[];
-    if (Array.isArray(record.data)) return record.data as BusinessDataPlan[];
-    if (Array.isArray(record.tariffs)) return record.tariffs as BusinessDataPlan[];
-  }
-  return [];
-}
+/** BuyPower plan row (code / desc / price). */
+export type BusinessDataPlan = BuyPowerPlanRow;
+export type BusinessCablePlan = BuyPowerPlanRow;
+export type { NormalizedUtilityPlan };
 
 export function networkToDisco(network: string): string {
   const key = network.trim().toLowerCase();
@@ -68,7 +45,6 @@ export function cableToDisco(provider: string): string {
     dstv: 'DSTV',
     gotv: 'GOTV',
     startimes: 'STARTIMES',
-    showmax: 'SHOWMAX',
   };
   return map[key] || provider.toUpperCase();
 }
@@ -127,7 +103,11 @@ export const businessPaymentsApi = {
     return businessApiRequest<BusinessPurchaseResult>('/payments/electricity', {
       method: 'POST',
       auth: true,
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        ...payload,
+        disco: payload.disco.toUpperCase(),
+        vendType: payload.vendType.toUpperCase() as 'PREPAID' | 'POSTPAID',
+      }),
     });
   },
 
@@ -150,8 +130,8 @@ export const businessPaymentsApi = {
   verifyMeter(params: { meter: string; disco: string; vendType: string }) {
     const query = new URLSearchParams({
       meter: params.meter,
-      disco: params.disco,
-      vendType: params.vendType,
+      disco: params.disco.toUpperCase(),
+      vendType: params.vendType.toUpperCase(),
     });
     return businessApiRequest<Record<string, unknown>>(`/payments/verify/meter?${query}`, {
       method: 'GET',
@@ -163,26 +143,52 @@ export const businessPaymentsApi = {
     return businessApiRequest<Record<string, unknown>>('/payments/verify/smartcard', {
       method: 'POST',
       auth: true,
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        meter: payload.meter,
+        disco: payload.disco.toUpperCase(),
+      }),
     });
   },
 
-  async dataPlans(provider: string): Promise<BusinessDataPlan[]> {
-    const query = new URLSearchParams({ provider: networkToDisco(provider) });
+  async dataPlans(provider: string): Promise<NormalizedUtilityPlan[]> {
+    const disco = networkToDisco(provider);
+    const query = new URLSearchParams({
+      provider: disco,
+      network: disco,
+    });
     const data = await businessApiRequest<unknown>(`/payments/data/plans?${query}`, {
       method: 'GET',
       auth: true,
     });
-    return asPlanList(data);
+    return extractBuyPowerPlanRows(data)
+      .map(normalizeBuyPowerPlan)
+      .filter((plan): plan is NormalizedUtilityPlan => Boolean(plan));
   },
 
-  async cablePlans(provider: string): Promise<BusinessCablePlan[]> {
+  async cablePlans(provider: string): Promise<NormalizedUtilityPlan[]> {
     const query = new URLSearchParams({ provider: cableToDisco(provider) });
     const data = await businessApiRequest<unknown>(`/payments/cable/plans?${query}`, {
       method: 'GET',
       auth: true,
     });
-    return asPlanList(data) as BusinessCablePlan[];
+    return extractBuyPowerPlanRows(data)
+      .map(normalizeBuyPowerPlan)
+      .filter((plan): plan is NormalizedUtilityPlan => Boolean(plan));
+  },
+
+  async electricityProviders(): Promise<Record<string, boolean>> {
+    const data = await businessApiRequest<unknown>('/payments/providers/electricity', {
+      method: 'GET',
+      auth: true,
+    });
+    if (data && typeof data === 'object' && !Array.isArray(data)) {
+      const record = data as Record<string, unknown>;
+      if (record.data && typeof record.data === 'object' && !Array.isArray(record.data)) {
+        return record.data as Record<string, boolean>;
+      }
+      return data as Record<string, boolean>;
+    }
+    return {};
   },
 };
 
