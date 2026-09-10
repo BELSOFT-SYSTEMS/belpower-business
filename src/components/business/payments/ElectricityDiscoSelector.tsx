@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Check, ChevronDown, Search } from 'lucide-react';
-import { getDiscoLogoPath } from '@/utils/discoLogoMap';
+import { BusinessProviderAvatar } from '@/components/business/BusinessProviderAvatar';
 import { cn } from '@/lib/utils';
 
 export type ElectricityDiscoOption = {
@@ -12,26 +12,6 @@ export type ElectricityDiscoOption = {
 };
 
 type PanelPosition = { top: number; left: number; width: number };
-
-function DiscoLogo({ code, size = 28 }: { code: string; size?: number }) {
-  const [src, setSrc] = useState(() => getDiscoLogoPath(code));
-
-  useEffect(() => {
-    setSrc(getDiscoLogoPath(code));
-  }, [code]);
-
-  return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={src}
-      alt=""
-      width={size}
-      height={size}
-      className="block h-7 w-7 shrink-0 rounded-full object-contain"
-      onError={() => setSrc('/electricity.png')}
-    />
-  );
-}
 
 type ElectricityDiscoSelectorProps = {
   discos: ElectricityDiscoOption[];
@@ -154,8 +134,8 @@ export function ElectricityDiscoSelector({
           )}
         >
           {selectedDisco ? (
-            <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-blue-50 ring-1 ring-blue-100">
-              <DiscoLogo code={selectedDisco.code} size={24} />
+            <span className="inline-flex shrink-0">
+              <BusinessProviderAvatar service="electricity" provider={selectedDisco.code} size="md" />
             </span>
           ) : null}
           <span className={cn('min-w-0 flex-1 truncate', !selectedDisco && 'text-gray-500')}>
@@ -203,9 +183,11 @@ export function ElectricityDiscoSelector({
                         isSelected && 'bg-blue-50 font-medium text-blue-normal',
                       )}
                     >
-                      <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-blue-50 ring-1 ring-blue-100">
-                        <DiscoLogo code={disco.code} size={24} />
-                      </span>
+                      <BusinessProviderAvatar
+                        service="electricity"
+                        provider={disco.code}
+                        size="md"
+                      />
                       <span className="min-w-0 flex-1 truncate">{disco.name}</span>
                       {!available ? (
                         <span className="text-xs text-gray-400">Unavailable</span>

@@ -1,13 +1,13 @@
 'use client';
 
-import Image from 'next/image';
 import { ChevronDown, Lock, Trash2, Users } from 'lucide-react';
 import {
   BusinessActionsMenu,
   BusinessActionsMenuItem,
 } from '@/components/business/BusinessActionsMenu';
+import { BusinessProviderAvatar } from '@/components/business/BusinessProviderAvatar';
 import { secondaryButtonClass } from '@/components/business/payments/paymentShared';
-import { getProviderLogo, getProviderName } from '@/data/mockPaymentCatalog';
+import { getProviderName } from '@/data/mockPaymentCatalog';
 import type { BeneficiaryGroup } from '@/types/business';
 import { cn } from '@/lib/utils';
 
@@ -127,15 +127,11 @@ export function BeneficiaryGroupCard({
             <ul className="mt-3 space-y-2 rounded-xl border border-gray-100 bg-gray-50 p-3">
               {group.members.map((member) => (
                 <li key={member.id} className="flex items-center gap-3 text-sm">
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white ring-1 ring-gray-200">
-                    <Image
-                      src={getProviderLogo('airtime', member.provider)}
-                      alt=""
-                      width={20}
-                      height={20}
-                      className="h-5 w-5 object-contain"
-                    />
-                  </span>
+                  <BusinessProviderAvatar
+                    service="airtime"
+                    provider={member.provider}
+                    size="sm"
+                  />
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-medium text-gray-900">
                       {member.label || getProviderName('airtime', member.provider)}

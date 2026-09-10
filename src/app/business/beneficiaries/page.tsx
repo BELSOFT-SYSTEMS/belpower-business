@@ -1,6 +1,5 @@
 'use client';
 
-import Image from 'next/image';
 import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { CheckCircle2, Plus, Trash2 } from 'lucide-react';
@@ -9,6 +8,7 @@ import {
   BusinessActionsMenu,
   BusinessActionsMenuItem,
 } from '@/components/business/BusinessActionsMenu';
+import { BusinessProviderAvatar } from '@/components/business/BusinessProviderAvatar';
 import { EmptyState } from '@/components/business/EmptyState';
 import { PageHeader } from '@/components/business/PageHeader';
 import { ElectricityDiscoSelector } from '@/components/business/payments/ElectricityDiscoSelector';
@@ -26,7 +26,6 @@ import {
   CABLE_PROVIDERS,
   ELECTRICITY_DISCOS,
   detectNetworkFromPhone,
-  getProviderLogo,
   getProviderName,
   isValidNigerianPhone,
   mockLookupMeter,
@@ -1386,15 +1385,15 @@ function BeneficiaryCard({
       )}
     >
       <div className="flex gap-3">
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-blue-50 ring-1 ring-blue-100">
-          <Image
-            src={getProviderLogo(catalogService, resolvedProvider)}
-            alt=""
-            width={28}
-            height={28}
-            className="h-7 w-7 object-contain"
-          />
-        </div>
+        <BusinessProviderAvatar
+          service={
+            item.service === 'phone' || item.service === 'airtime' || item.service === 'data'
+              ? 'airtime'
+              : item.service
+          }
+          provider={resolvedProvider}
+          size="md"
+        />
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
