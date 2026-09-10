@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { Copy, Download, RotateCw, Repeat2, X } from 'lucide-react';
@@ -36,6 +36,18 @@ type BusinessTransactionDetailModalProps = {
   transactionId: string | null;
   open: boolean;
   onClose: () => void;
+  onUpdated?: (update: {
+    id: string;
+    status?: 'completed' | 'pending' | 'failed';
+    amount?: number;
+    reference?: string;
+    service?: string;
+    provider?: string;
+    branchName?: string;
+    userName?: string;
+    createdAt?: string;
+    entryType?: 'credit' | 'debit';
+  }) => void;
 };
 
 function DetailRow({
@@ -123,13 +135,20 @@ function mapApiTransactionToDetail(
 ): BusinessTransactionDetail {
   const metadata = (row.metadata || {}) as BusinessTransactionDetail['metadata'];
   const amount = Number(row.amount || 0);
+  const status =
+    row.status === 'completed' || row.status === 'pending' || row.status === 'failed'
+      ? row.status
+      : row.status === 'cancelled'
+        ? 'failed'
+        : 'pending';
+
   return {
     id: row.id,
     reference: row.reference,
     order_id: row.detail?.orderId || row.reference,
     receipt_number: row.reference,
     type: row.service,
-    status: row.status,
+    status,
     payment_method: row.paymentMethod || 'wallet',
     payment_type: row.service,
     amount_paid: amount,
@@ -154,10 +173,27 @@ function mapApiTransactionToDetail(
   };
 }
 
+function toListUpdate(detail: BusinessTransactionDetail) {
+  const status = normalizeStatusBadge(detail.status);
+  return {
+    id: detail.id,
+    status,
+    amount: Number(detail.amount_paid || detail.amount || 0),
+    reference: detail.reference,
+    service: detail.service,
+    provider: detail.provider,
+    branchName: detail.branchName,
+    userName: detail.userName,
+    createdAt: detail.created_at,
+    entryType: detail.entryType,
+  };
+}
+
 export function BusinessTransactionDetailModal({
   transactionId,
   open,
   onClose,
+  onUpdated,
 }: BusinessTransactionDetailModalProps) {
   const router = useRouter();
   const { isAuthenticated } = useBusinessAuth();
@@ -166,6 +202,8 @@ export function BusinessTransactionDetailModal({
   const [isRequerying, setIsRequerying] = useState(false);
   const [transaction, setTransaction] = useState<BusinessTransactionDetail | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
+  const onUpdatedRef = useRef(onUpdated);
+  onUpdatedRef.current = onUpdated;
 
   useEffect(() => {
     if (!open || !transactionId) {
@@ -183,7 +221,11 @@ export function BusinessTransactionDetailModal({
     void (async () => {
       try {
         const row = await businessTransactionsApi.get(transactionId);
-        if (!cancelled) setTransaction(mapApiTransactionToDetail(row));
+        if (!cancelled) {
+          const detail = mapApiTransactionToDetail(row);
+          setTransaction(detail);
+          onUpdatedRef.current?.(toListUpdate(detail));
+        }
       } catch (error) {
         if (!cancelled) {
           setTransaction(null);
@@ -218,9 +260,12 @@ export function BusinessTransactionDetailModal({
   }, [open, transactionId]);
 
   const reloadDetail = useCallback(async () => {
-    if (!transactionId || !isAuthenticated) return;
+    if (!transactionId || !isAuthenticated) return null;
     const row = await businessTransactionsApi.get(transactionId);
-    setTransaction(mapApiTransactionToDetail(row));
+    const detail = mapApiTransactionToDetail(row);
+    setTransaction(detail);
+    onUpdatedRef.current?.(toListUpdate(detail));
+    return detail;
   }, [isAuthenticated, transactionId]);
 
   const handleBuyAgain = useCallback(() => {

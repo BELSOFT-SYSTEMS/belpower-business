@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { PageHeader } from '@/components/business/PageHeader';
 import { BusinessTransactionList } from '@/components/business/BusinessTransactionList';
 import { useBusinessAuth } from '@/context/BusinessAuthContext';
@@ -51,6 +51,34 @@ export default function TransactionsPage() {
   const [loading, setLoading] = useState(false);
   const [statusFilter, setStatusFilter] = useState<(typeof STATUS_FILTERS)[number]>('all');
   const [search, setSearch] = useState('');
+
+  const handleTransactionUpdated = useCallback(
+    (update: {
+      id: string;
+      status?: BusinessTransactionPreview['status'];
+      amount?: number;
+      reference?: string;
+      service?: string;
+      provider?: string;
+      branchName?: string;
+      userName?: string;
+      createdAt?: string;
+      entryType?: BusinessTransactionPreview['entryType'];
+    }) => {
+      setTransactions((prev) =>
+        prev.map((tx) =>
+          tx.id === update.id
+            ? {
+                ...tx,
+                ...update,
+                status: update.status ?? tx.status,
+              }
+            : tx,
+        ),
+      );
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -131,6 +159,7 @@ export default function TransactionsPage() {
           emptyMessage={
             loading ? 'Loading transactions…' : 'No transactions match your filters.'
           }
+          onTransactionUpdated={handleTransactionUpdated}
         />
       </div>
     </div>

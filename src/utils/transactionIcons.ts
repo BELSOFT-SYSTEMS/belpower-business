@@ -12,7 +12,15 @@ export type TransactionIconInput = {
 export function getTransactionIcon(transaction: TransactionIconInput): string {
   const type = (transaction.type || '').toLowerCase();
 
-  if (type === 'deposit' || type === 'wallet' || type === 'refund') {
+  if (
+    type === 'deposit' ||
+    type === 'wallet' ||
+    type === 'refund' ||
+    type === 'business_wallet_funding' ||
+    type.includes('wallet_fund') ||
+    type.includes('funding') ||
+    type.includes('allocate')
+  ) {
     return '/wallet.png';
   }
 
