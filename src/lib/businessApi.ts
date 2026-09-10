@@ -59,7 +59,17 @@ function getBaseUrl(): string {
       'API_BASE_MISSING',
     );
   }
-  return base.replace(/\/$/, '');
+
+  let normalized = base.replace(/\/$/, '');
+
+  // Express mounts the API under /api. Correct a common misconfig:
+  // https://api.belpower.ng/v1/business → https://api.belpower.ng/api/v1/business
+  normalized = normalized.replace(
+    /^(https?:\/\/[^/]+)\/v1\/business$/i,
+    '$1/api/v1/business',
+  );
+
+  return normalized;
 }
 
 type ApiSuccess<T> = {
