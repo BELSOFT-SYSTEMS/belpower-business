@@ -572,4 +572,65 @@ export const businessWalletApi = {
       walletId: string | null;
     }>(`/wallet/statements${qs ? `?${qs}` : ''}`, { method: 'GET', auth: true });
   },
+
+  fundCard(payload: { amount: number; email?: string }) {
+    return businessApiRequest<{
+      authorization_url: string;
+      access_code?: string;
+      reference: string;
+      amount: number;
+    }>('/wallet/fund/card', {
+      method: 'POST',
+      auth: true,
+      body: JSON.stringify(payload),
+    });
+  },
+
+  verifyFund(reference: string) {
+    return businessApiRequest<{
+      status: string;
+      reference: string;
+      amount: number;
+      alreadyProcessed?: boolean;
+      newBalance?: number | null;
+    }>(`/wallet/fund/verify/${encodeURIComponent(reference)}`, {
+      method: 'POST',
+      auth: true,
+    });
+  },
+
+  fundBuyPowerDva(payload: { amount: number; name?: string; email?: string }) {
+    return businessApiRequest<{
+      transaction_id: string;
+      reference: string;
+      account_number: string;
+      account_name: string;
+      bank_name: string;
+      bank_code: string;
+      expires_at: string;
+      amount: number;
+      base_amount?: number;
+      buypower_processing_fee?: number;
+      total_to_transfer?: number;
+      requested_credit?: number;
+    }>('/wallet/fund/buypower-dva', {
+      method: 'POST',
+      auth: true,
+      body: JSON.stringify(payload),
+    });
+  },
+
+  fundingStatus(transactionId: string) {
+    return businessApiRequest<{
+      id: string;
+      reference: string;
+      status: string;
+      amount: number;
+      paymentMethod?: string | null;
+      expiresAt?: string | null;
+    }>(`/wallet/fund/status/${encodeURIComponent(transactionId)}`, {
+      method: 'GET',
+      auth: true,
+    });
+  },
 };

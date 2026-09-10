@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import {
   Building2,
   Check,
@@ -15,30 +16,43 @@ import {
 import { toast } from 'sonner';
 import { PageHeader } from '@/components/business/PageHeader';
 import {
-  createMockWalletFundInvoice,
   formatFundCountdown,
   getRemainingFundSeconds,
   MAX_WALLET_FUND_AMOUNT,
   MIN_WALLET_FUND_AMOUNT,
-  mockInitWalletCardFund,
-  mockPollWalletFundPayment,
-  type MockWalletFundInvoice,
-} from '@/data/mockWalletFundFlow';
+  pollWalletFundPayment,
+  type WalletFundInvoice,
+} from '@/constants/walletFund';
+import { useBusinessAuth } from '@/context/BusinessAuthContext';
+import { BusinessApiError, businessWalletApi } from '@/lib/businessApi';
 import { formatPrice } from '@/utils/formatPrice';
 import { cn } from '@/lib/utils';
 
 type PaymentMethod = 'card' | 'bank';
-type FlowView = 'form' | 'card-redirect' | 'bank-waiting' | 'success' | 'failed' | 'expired';
+type FlowView = 'form' | 'card-waiting' | 'bank-waiting' | 'success' | 'failed' | 'expired';
 
 function parseAmount(value: string): number {
   const parsed = Number(value.replace(/,/g, '').trim());
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function openPaystackCheckout(url: string) {
+  const link = document.createElement('a');
+  link.href = url;
+  link.target = '_blank';
+  link.rel = 'noopener noreferrer';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
 export function FundWalletFlow() {
+  const { user, business, refreshMe } = useBusinessAuth();
+  const searchParams = useSearchParams();
   const [amountInput, setAmountInput] = useState('');
   const [method, setMethod] = useState<PaymentMethod | null>(null);
-  const [invoice, setInvoice] = useState<MockWalletFundInvoice | null>(null);
+  const [invoice, setInvoice] = useState<WalletFundInvoice | null>(null);
+  const [cardReference, setCardReference] = useState<string | null>(null);
   const [view, setView] = useState<FlowView>('form');
   const [countdown, setCountdown] = useState(0);
   const [copiedField, setCopiedField] = useState<string | null>(null);
@@ -46,6 +60,7 @@ export function FundWalletFlow() {
   const [isStartingCard, setIsStartingCard] = useState(false);
   const [isConfirmingTransfer, setIsConfirmingTransfer] = useState(false);
   const pollingRef = useRef(false);
+  const handledCallbackRef = useRef<string | null>(null);
 
   const amount = useMemo(() => parseAmount(amountInput), [amountInput]);
   const amountIsValid =
@@ -54,6 +69,7 @@ export function FundWalletFlow() {
   const resetFlow = useCallback(() => {
     setMethod(null);
     setInvoice(null);
+    setCardReference(null);
     setView('form');
     setCountdown(0);
     setCopiedField(null);
@@ -72,10 +88,60 @@ export function FundWalletFlow() {
 
   const handleAmountChange = (value: string) => {
     setAmountInput(value);
-    if (method || invoice) {
+    if (method || invoice || cardReference) {
       resetFlow();
     }
   };
+
+  const pollCardReference = useCallback(
+    async (reference: string) => {
+      if (pollingRef.current) return;
+      pollingRef.current = true;
+      setView('card-waiting');
+      setMethod('card');
+      setCardReference(reference);
+
+      try {
+        const result = await pollWalletFundPayment(async () => {
+          const status = await businessWalletApi.verifyFund(reference);
+          if (status.status === 'completed') return 'completed';
+          if (status.status === 'failed' || status.status === 'abandoned') return 'failed';
+          return 'pending';
+        });
+
+        if (result === 'completed') {
+          setView('success');
+          toast.success('Payment successful! Your wallet has been credited.');
+          await refreshMe();
+          return;
+        }
+
+        setView(result === 'expired' ? 'expired' : 'failed');
+        if (result === 'failed') {
+          toast.error('Card payment could not be confirmed');
+        }
+      } catch (error) {
+        setView('failed');
+        toast.error(
+          error instanceof BusinessApiError ? error.message : 'Could not verify card payment',
+        );
+      } finally {
+        pollingRef.current = false;
+        setIsStartingCard(false);
+      }
+    },
+    [refreshMe],
+  );
+
+  useEffect(() => {
+    const reference = searchParams.get('reference');
+    const status = searchParams.get('status');
+    if (!reference || handledCallbackRef.current === reference) return;
+    handledCallbackRef.current = reference;
+    if (status === 'success' || status === 'completed' || !status) {
+      void pollCardReference(reference);
+    }
+  }, [pollCardReference, searchParams]);
 
   const handleSelectBank = useCallback(async () => {
     if (!amountIsValid || isInitializingBank) return;
@@ -84,40 +150,79 @@ export function FundWalletFlow() {
     setIsInitializingBank(true);
 
     try {
-      await new Promise((resolve) => window.setTimeout(resolve, 700));
-      const nextInvoice = createMockWalletFundInvoice(amount);
-      setInvoice(nextInvoice);
+      const result = await businessWalletApi.fundBuyPowerDva({
+        amount,
+        name: business?.businessName,
+        email: user?.email || business?.email,
+      });
+
+      setInvoice({
+        reference: result.reference,
+        transaction_id: result.transaction_id,
+        amount: Number(result.amount ?? result.total_to_transfer ?? amount),
+        bank_name: result.bank_name,
+        bank_code: result.bank_code,
+        account_number: result.account_number,
+        account_name: result.account_name,
+        expires_at: result.expires_at,
+        base_amount: result.base_amount,
+        buypower_processing_fee: result.buypower_processing_fee,
+        requested_credit: result.requested_credit ?? amount,
+      });
       setView('form');
       toast.success('Transfer details ready. Complete payment within 30 minutes.');
-    } catch {
-      toast.error('Could not create transfer details');
+    } catch (error) {
+      toast.error(
+        error instanceof BusinessApiError
+          ? error.message
+          : 'Could not create transfer details',
+      );
       setMethod(null);
     } finally {
       setIsInitializingBank(false);
     }
-  }, [amount, amountIsValid, isInitializingBank]);
+  }, [
+    amount,
+    amountIsValid,
+    business?.businessName,
+    business?.email,
+    isInitializingBank,
+    user?.email,
+  ]);
 
   const handleCardPay = useCallback(async () => {
     if (!amountIsValid || isStartingCard) return;
 
     setMethod('card');
     setIsStartingCard(true);
-    setView('card-redirect');
+    setView('card-waiting');
 
     try {
-      const init = await mockInitWalletCardFund(amount);
-      toast.message('Opening Paystack checkout (demo)…');
-      await new Promise((resolve) => window.setTimeout(resolve, 1800));
-      void init.authorization_url;
-      setView('success');
-      toast.success('Wallet funded successfully (demo)');
-    } catch {
+      const init = await businessWalletApi.fundCard({
+        amount,
+        email: user?.email || business?.email,
+      });
+      setCardReference(init.reference);
+      openPaystackCheckout(init.authorization_url);
+      toast.message('Complete payment in the Paystack tab, then return here.');
+      await pollCardReference(init.reference);
+    } catch (error) {
       setView('failed');
-      toast.error('Card payment could not be started');
-    } finally {
+      toast.error(
+        error instanceof BusinessApiError
+          ? error.message
+          : 'Card payment could not be started',
+      );
       setIsStartingCard(false);
     }
-  }, [amount, amountIsValid, isStartingCard]);
+  }, [
+    amount,
+    amountIsValid,
+    business?.email,
+    isStartingCard,
+    pollCardReference,
+    user?.email,
+  ]);
 
   const handleConfirmTransfer = useCallback(async () => {
     if (!invoice || isConfirmingTransfer || pollingRef.current) return;
@@ -127,13 +232,18 @@ export function FundWalletFlow() {
     pollingRef.current = true;
 
     try {
-      const result = await mockPollWalletFundPayment(invoice.transaction_id, () => {
-        setView('bank-waiting');
+      const result = await pollWalletFundPayment(async () => {
+        const status = await businessWalletApi.fundingStatus(invoice.transaction_id);
+        if (status.status === 'completed') return 'completed';
+        if (status.status === 'failed') return 'failed';
+        if (status.status === 'expired') return 'expired';
+        return 'pending';
       });
 
       if (result === 'completed') {
         setView('success');
         toast.success('Payment successful! Your wallet has been credited.');
+        await refreshMe();
         return;
       }
 
@@ -144,14 +254,18 @@ export function FundWalletFlow() {
 
       setView('failed');
       toast.error('Transfer could not be confirmed');
-    } catch {
+    } catch (error) {
       setView('failed');
-      toast.error('Transfer could not be confirmed');
+      toast.error(
+        error instanceof BusinessApiError
+          ? error.message
+          : 'Transfer could not be confirmed',
+      );
     } finally {
       setIsConfirmingTransfer(false);
       pollingRef.current = false;
     }
-  }, [invoice, isConfirmingTransfer]);
+  }, [invoice, isConfirmingTransfer, refreshMe]);
 
   useEffect(() => {
     if (!invoice?.expires_at || view === 'success') return;
@@ -170,6 +284,10 @@ export function FundWalletFlow() {
   }, [invoice?.expires_at, method, view]);
 
   if (view === 'success') {
+    const credited =
+      invoice?.requested_credit ??
+      (cardReference ? amount : invoice?.amount) ??
+      amount;
     return (
       <div className="mx-auto max-w-3xl space-y-6">
         <PageHeader title="Fund wallet" description="Add money to your company wallet." />
@@ -179,7 +297,7 @@ export function FundWalletFlow() {
           </div>
           <h2 className="text-xl font-semibold text-gray-900">Payment successful</h2>
           <p className="mt-2 text-sm text-gray-600">
-            {formatPrice(amount)} has been credited to your business wallet (demo).
+            {formatPrice(credited)} has been credited to your business wallet.
           </p>
           <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
             <Link
@@ -233,7 +351,7 @@ export function FundWalletFlow() {
           <button
             type="button"
             onClick={() => {
-              setAmountInput(String(amount));
+              setAmountInput(String(amount || ''));
               resetFlow();
             }}
             className="mt-6 rounded-xl bg-blue-normal px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-normal-hover"
@@ -265,10 +383,11 @@ export function FundWalletFlow() {
           onChange={(event) => handleAmountChange(event.target.value)}
           placeholder={`Enter amount (min ${formatPrice(MIN_WALLET_FUND_AMOUNT)})`}
           className="mt-2 w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-blue-normal focus:ring-2 focus:ring-blue-normal/20"
-          disabled={view === 'card-redirect' || view === 'bank-waiting'}
+          disabled={view === 'card-waiting' || view === 'bank-waiting'}
         />
         <p className="mt-2 text-xs text-gray-500">
-          Minimum {formatPrice(MIN_WALLET_FUND_AMOUNT)} · Maximum {formatPrice(MAX_WALLET_FUND_AMOUNT)}
+          Minimum {formatPrice(MIN_WALLET_FUND_AMOUNT)} · Maximum{' '}
+          {formatPrice(MAX_WALLET_FUND_AMOUNT)}
         </p>
         {amountInput && !amountIsValid ? (
           <p className="mt-2 text-xs text-red-600">
@@ -288,10 +407,12 @@ export function FundWalletFlow() {
                 setMethod('card');
                 setInvoice(null);
               }}
-              disabled={view === 'card-redirect' || view === 'bank-waiting'}
+              disabled={view === 'card-waiting' || view === 'bank-waiting'}
               className={cn(
                 'flex items-center gap-3 rounded-xl border bg-white p-4 text-left shadow-sm transition hover:bg-gray-50',
-                method === 'card' ? 'border-blue-normal ring-2 ring-blue-normal/20' : 'border-gray-200',
+                method === 'card'
+                  ? 'border-blue-normal ring-2 ring-blue-normal/20'
+                  : 'border-gray-200',
               )}
             >
               <Image src="/paystack.png" alt="Paystack" width={32} height={32} className="shrink-0" />
@@ -304,10 +425,12 @@ export function FundWalletFlow() {
             <button
               type="button"
               onClick={handleSelectBank}
-              disabled={isInitializingBank || view === 'card-redirect' || view === 'bank-waiting'}
+              disabled={isInitializingBank || view === 'card-waiting' || view === 'bank-waiting'}
               className={cn(
                 'flex items-center gap-3 rounded-xl border bg-white p-4 text-left shadow-sm transition hover:bg-gray-50',
-                method === 'bank' ? 'border-blue-normal ring-2 ring-blue-normal/20' : 'border-gray-200',
+                method === 'bank'
+                  ? 'border-blue-normal ring-2 ring-blue-normal/20'
+                  : 'border-gray-200',
               )}
             >
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-light text-blue-normal">
@@ -316,7 +439,9 @@ export function FundWalletFlow() {
               <div>
                 <p className="text-sm font-semibold text-gray-900">Bank transfer</p>
                 <p className="text-xs text-gray-500">
-                  {isInitializingBank ? 'Preparing details…' : 'Transfer from your bank account'}
+                  {isInitializingBank
+                    ? 'Preparing details…'
+                    : 'Transfer via BuyPower virtual account'}
                 </p>
               </div>
             </button>
@@ -331,22 +456,31 @@ export function FundWalletFlow() {
             <span>Secured by Paystack</span>
           </div>
           <p className="mt-4 text-2xl font-semibold text-gray-900">{formatPrice(amount)}</p>
-          <p className="mt-1 text-sm text-gray-500">You will be redirected to Paystack to complete payment.</p>
-          <button
-            type="button"
-            onClick={handleCardPay}
-            disabled={isStartingCard || view === 'card-redirect'}
-            className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-normal px-4 py-3 text-sm font-semibold text-white hover:bg-blue-normal-hover disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {isStartingCard || view === 'card-redirect' ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Opening Paystack…
-              </>
-            ) : (
-              'Pay with Paystack'
-            )}
-          </button>
+          <p className="mt-1 text-sm text-gray-500">
+            Paystack opens in a new tab. Keep this page open while you complete payment.
+          </p>
+          {view === 'card-waiting' ? (
+            <div className="mt-6 flex items-center gap-3 rounded-lg bg-blue-light/40 p-4">
+              <Loader2 className="h-5 w-5 shrink-0 animate-spin text-blue-normal" />
+              <p className="text-sm text-blue-normal">Waiting for Paystack payment confirmation…</p>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={handleCardPay}
+              disabled={isStartingCard}
+              className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-normal px-4 py-3 text-sm font-semibold text-white hover:bg-blue-normal-hover disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isStartingCard ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Opening Paystack…
+                </>
+              ) : (
+                'Pay with Paystack'
+              )}
+            </button>
+          )}
         </section>
       ) : null}
 
@@ -383,6 +517,12 @@ export function FundWalletFlow() {
                 )}
               </button>
             </div>
+            {invoice.buypower_processing_fee ? (
+              <p className="mt-2 text-xs text-gray-600">
+                Includes ₦{invoice.buypower_processing_fee} processing fee. Wallet credit:{' '}
+                {formatPrice(invoice.requested_credit ?? amount)}.
+              </p>
+            ) : null}
           </div>
 
           <div>
@@ -454,10 +594,6 @@ export function FundWalletFlow() {
           ) : null}
         </section>
       ) : null}
-
-      <p className="text-center text-xs text-gray-500">
-        Demo UI — no real payments processed. Phase 3 will connect live Paystack and BuyPower DVA APIs.
-      </p>
     </div>
   );
 }
