@@ -1,6 +1,7 @@
 'use client';
 
 import Image from 'next/image';
+import { useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
 
 export function getBusinessInitials(name: string | null | undefined): string {
@@ -24,8 +25,13 @@ type BusinessAvatarProps = {
 
 export function BusinessAvatar({ name, logoUrl, size = 36, className }: BusinessAvatarProps) {
   const initials = getBusinessInitials(name);
+  const [imageFailed, setImageFailed] = useState(false);
 
-  if (logoUrl) {
+  useEffect(() => {
+    setImageFailed(false);
+  }, [logoUrl]);
+
+  if (logoUrl && !imageFailed) {
     return (
       <Image
         src={logoUrl}
@@ -37,6 +43,7 @@ export function BusinessAvatar({ name, logoUrl, size = 36, className }: Business
           className,
         )}
         unoptimized={logoUrl.startsWith('blob:') || logoUrl.startsWith('data:')}
+        onError={() => setImageFailed(true)}
       />
     );
   }

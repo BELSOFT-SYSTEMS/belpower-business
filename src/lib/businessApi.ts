@@ -108,6 +108,20 @@ async function parseJson(response: Response): Promise<Record<string, unknown>> {
   }
 }
 
+function resolveApiErrorMessage(payload: Record<string, unknown>, fallback = 'Request failed'): string {
+  if (typeof payload.message === 'string' && payload.message.trim()) {
+    return payload.message;
+  }
+  const nested = payload.error;
+  if (nested && typeof nested === 'object' && !Array.isArray(nested)) {
+    const nestedMessage = (nested as Record<string, unknown>).message;
+    if (typeof nestedMessage === 'string' && nestedMessage.trim()) {
+      return nestedMessage;
+    }
+  }
+  return fallback;
+}
+
 export async function businessApiRequest<T>(
   path: string,
   options: RequestInit & { auth?: boolean } = {},
@@ -133,11 +147,19 @@ export async function businessApiRequest<T>(
   const payload = await parseJson(response);
   if (!response.ok || payload.success === false) {
     const errors = (payload.errors as Record<string, unknown> | undefined) || undefined;
+    const nestedError =
+      payload.error && typeof payload.error === 'object' && !Array.isArray(payload.error)
+        ? (payload.error as Record<string, unknown>)
+        : undefined;
     throw new BusinessApiError(
-      String(payload.message || 'Request failed'),
+      resolveApiErrorMessage(payload),
       response.status,
-      typeof errors?.error_code === 'string' ? errors.error_code : undefined,
-      errors || payload,
+      typeof errors?.error_code === 'string'
+        ? errors.error_code
+        : typeof nestedError?.code === 'string'
+          ? nestedError.code
+          : undefined,
+      errors || nestedError || payload,
     );
   }
 

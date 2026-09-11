@@ -303,7 +303,11 @@ export function ElectricityPaymentFlow() {
           description={`${formatPrice(amount)} has been paid to ${getProviderName('electricity', disco)}.`}
           reference={result.reference}
           rows={[
-            { label: 'Disco', value: getProviderName('electricity', disco) },
+            {
+              label: 'Disco',
+              value: getProviderName('electricity', disco),
+              avatar: { service: 'electricity', provider: disco },
+            },
             { label: 'Meter', value: meterNumber },
             { label: 'Customer', value: lookup?.customerName ?? '—' },
             { label: 'Type', value: meterType },
@@ -320,7 +324,11 @@ export function ElectricityPaymentFlow() {
           description="Your payment is being confirmed with the disco. The wallet debit will be refunded automatically if it fails."
           reference={result.reference}
           rows={[
-            { label: 'Disco', value: getProviderName('electricity', disco) },
+            {
+              label: 'Disco',
+              value: getProviderName('electricity', disco),
+              avatar: { service: 'electricity', provider: disco },
+            },
             { label: 'Meter', value: meterNumber },
             { label: 'Customer', value: lookup?.customerName ?? '—' },
             { label: 'Amount', value: formatPrice(amount) },
@@ -479,7 +487,11 @@ export function ElectricityPaymentFlow() {
 
             <ReviewList
               rows={[
-                { label: 'Disco', value: getProviderName('electricity', disco) },
+                {
+                  label: 'Disco',
+                  value: getProviderName('electricity', disco),
+                  avatar: { service: 'electricity', provider: disco },
+                },
                 { label: 'Meter', value: meterNumber || '—' },
                 { label: 'Customer', value: lookup?.customerName ?? 'Not verified' },
                 { label: 'Phone', value: phoneOk ? normalizeBusinessPhone(phone) : '—' },

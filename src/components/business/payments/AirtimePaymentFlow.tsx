@@ -154,7 +154,11 @@ export function AirtimePaymentFlow() {
           description={`${formatPrice(amount)} ${getProviderName('airtime', network)} airtime has been sent to ${normalizePhone(phone)}.`}
           reference={result.reference}
           rows={[
-            { label: 'Network', value: getProviderName('airtime', network) },
+            {
+              label: 'Network',
+              value: getProviderName('airtime', network),
+              avatar: { service: 'airtime', provider: network },
+            },
             { label: 'Phone', value: normalizePhone(phone) },
             { label: 'Amount', value: formatPrice(amount) },
             { label: 'Branch', value: paymentBranchLabel(session.selectedBranch) },
@@ -168,7 +172,11 @@ export function AirtimePaymentFlow() {
           description="Your purchase is being confirmed with the provider. The wallet debit will be refunded automatically if it fails."
           reference={result.reference}
           rows={[
-            { label: 'Network', value: getProviderName('airtime', network) },
+            {
+              label: 'Network',
+              value: getProviderName('airtime', network),
+              avatar: { service: 'airtime', provider: network },
+            },
             { label: 'Phone', value: normalizePhone(phone) },
             { label: 'Amount', value: formatPrice(amount) },
             { label: 'Status', value: 'Pending confirmation' },
@@ -271,7 +279,11 @@ export function AirtimePaymentFlow() {
 
             <ReviewList
               rows={[
-                { label: 'Network', value: getProviderName('airtime', network) },
+                {
+                  label: 'Network',
+                  value: getProviderName('airtime', network),
+                  avatar: { service: 'airtime', provider: network },
+                },
                 { label: 'Phone', value: phoneOk ? normalizePhone(phone) : '—' },
                 { label: 'Amount', value: amount ? formatPrice(amount) : '—' },
                 { label: 'Debit from', value: session.wallet.label },

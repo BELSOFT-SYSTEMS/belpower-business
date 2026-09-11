@@ -160,7 +160,11 @@ export function CablePaymentFlow() {
 
   const summary = useMemo(
     () => [
-      { label: 'Provider', value: getProviderName('cable', provider) },
+      {
+        label: 'Provider',
+        value: getProviderName('cable', provider),
+        avatar: { service: 'cable', provider },
+      },
       { label: 'Smartcard', value: smartCard || '—' },
       { label: 'Package', value: selectedPackage?.name ?? '—' },
       { label: 'Phone', value: phoneOk ? normalizeBusinessPhone(phone) : '—' },

@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { PageHeader } from '@/components/business/PageHeader';
 import { BusinessSelect } from '@/components/business/BusinessSelect';
 import { StatusBadge } from '@/components/business/StatusBadge';
+import { BusinessProviderAvatar } from '@/components/business/BusinessProviderAvatar';
 import {
   AIRTIME_MAX,
   AIRTIME_MIN,
@@ -534,9 +535,19 @@ function BulkLine({
           </button>
         </div>
       </div>
-      <div className="mt-2 flex items-center justify-between text-xs">
-        <p className={error ? 'text-red-600' : 'text-gray-500'}>
-          {error ?? `${getProviderName(row.service, row.provider)} · ${formatPrice(rowAmount(row))}`}
+      <div className="mt-2 flex items-center justify-between gap-2 text-xs">
+        <p className={`flex min-w-0 items-center gap-2 ${error ? 'text-red-600' : 'text-gray-500'}`}>
+          {!error ? (
+            <BusinessProviderAvatar
+              service={row.service}
+              provider={row.provider}
+              size="sm"
+              alt={getProviderName(row.service, row.provider)}
+            />
+          ) : null}
+          <span className="min-w-0 truncate">
+            {error ?? `${getProviderName(row.service, row.provider)} · ${formatPrice(rowAmount(row))}`}
+          </span>
         </p>
       </div>
     </div>
@@ -559,9 +570,21 @@ function ResultsTable({ rows }: { rows: BulkRow[] }) {
           <tbody className="divide-y divide-gray-100">
             {rows.map((row) => (
               <tr key={row.id}>
-                <td className="px-4 py-3 capitalize text-gray-900">
-                  {row.service}
-                  <span className="block text-xs text-gray-500">{getProviderName(row.service, row.provider)}</span>
+                <td className="px-4 py-3 text-gray-900">
+                  <div className="flex items-center gap-2">
+                    <BusinessProviderAvatar
+                      service={row.service}
+                      provider={row.provider}
+                      size="sm"
+                      alt={getProviderName(row.service, row.provider)}
+                    />
+                    <div className="min-w-0">
+                      <span className="capitalize">{row.service}</span>
+                      <span className="block truncate text-xs text-gray-500">
+                        {getProviderName(row.service, row.provider)}
+                      </span>
+                    </div>
+                  </div>
                 </td>
                 <td className="px-4 py-3 font-mono text-gray-800">
                   {row.service === 'airtime' || row.service === 'data' ? normalizePhone(row.account) : row.account}

@@ -696,13 +696,30 @@ export function SavedBeneficiaryPicker({
   );
 }
 
-export function ReviewList({ rows }: { rows: { label: string; value: string }[] }) {
+export type ReviewRow = {
+  label: string;
+  value: string;
+  /** Optional provider chip beside the value (Network / Disco / Provider rows). */
+  avatar?: { service: string; provider: string };
+};
+
+export function ReviewList({ rows }: { rows: ReviewRow[] }) {
   return (
     <dl className="divide-y divide-gray-100 rounded-xl border border-gray-200 bg-gray-50">
       {rows.map((row) => (
-        <div key={row.label} className="flex items-start justify-between gap-4 px-4 py-3 text-sm">
+        <div key={row.label} className="flex items-center justify-between gap-4 px-4 py-3 text-sm">
           <dt className="text-gray-500">{row.label}</dt>
-          <dd className="text-right font-medium text-gray-900">{row.value}</dd>
+          <dd className="flex min-w-0 items-center justify-end gap-2 text-right font-medium text-gray-900">
+            {row.avatar ? (
+              <BusinessProviderAvatar
+                service={row.avatar.service}
+                provider={row.avatar.provider}
+                size="sm"
+                alt={row.value}
+              />
+            ) : null}
+            <span className="min-w-0 truncate">{row.value}</span>
+          </dd>
         </div>
       ))}
     </dl>
@@ -720,7 +737,7 @@ export function PaymentSuccessView({
   title: string;
   description: string;
   reference: string;
-  rows: { label: string; value: string }[];
+  rows: ReviewRow[];
   onAgain: () => void;
   againLabel: string;
 }) {

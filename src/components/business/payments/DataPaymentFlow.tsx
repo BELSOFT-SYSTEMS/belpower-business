@@ -144,7 +144,11 @@ export function DataPaymentFlow() {
 
   const summary = useMemo(
     () => [
-      { label: 'Network', value: getProviderName('data', network) },
+      {
+        label: 'Network',
+        value: getProviderName('data', network),
+        avatar: { service: 'data', provider: network },
+      },
       { label: 'Phone', value: phone ? normalizePhone(phone) : '—' },
       {
         label: 'Plan',

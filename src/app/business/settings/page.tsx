@@ -84,8 +84,16 @@ export default function BusinessSettingsPage() {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    if (!file.type.startsWith('image/')) {
-      toast.error('Choose an image file for the logo');
+    const mime = String(file.type || '').toLowerCase();
+    if (mime !== 'image/png' && mime !== 'image/jpeg' && mime !== 'image/jpg') {
+      toast.error('Logo must be a PNG or JPG image');
+      event.target.value = '';
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Logo is too large. Max size is 5MB.');
+      event.target.value = '';
       return;
     }
 
@@ -279,11 +287,11 @@ export default function BusinessSettingsPage() {
               >
                 Change logo
               </button>
-              <p className="mt-1.5 text-xs text-gray-500">PNG or JPG. Stored in Sanity.</p>
+              <p className="mt-1.5 text-xs text-gray-500">PNG or JPG, max 5MB. Stored in Sanity.</p>
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/*"
+                accept="image/png,image/jpeg"
                 className="hidden"
                 onChange={handleLogoPick}
               />
