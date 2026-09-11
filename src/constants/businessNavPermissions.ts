@@ -42,7 +42,7 @@ export const BUSINESS_NAV_ITEMS: BusinessNavItem[] = [
   { name: 'Beneficiaries', href: '/business/beneficiaries', permission: 'beneficiaries.view' },
   { name: 'Transactions', href: '/business/transactions', permission: 'transactions.view' },
   { name: 'Analytics', href: '/business/analytics', permission: 'analytics.view' },
-  { name: 'Schedules', href: '/business/schedules', permission: 'schedules.view' },
+  { name: 'Schedules', href: '/business/schedules', permission: 'schedules.view', locked: true },
   { name: 'Team Management', href: '/business/team', permission: 'team.view' },
   { name: 'Business Settings', href: '/business/settings', permission: 'business.settings.view' },
 ];
